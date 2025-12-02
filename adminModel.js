@@ -24,11 +24,12 @@ function getAllUsers() {
 }
 
 /**
- * Get user by ID
+ * Get user by ID (supports both userid and uid fields)
  */
 function getUserById(userId) {
     const users = getAllUsers();
-    return users.find(u => u.userid === userId);
+    // Try to find by userid or uid field
+    return users.find(u => String(u.userid) === String(userId) || String(u.uid) === String(userId));
 }
 
 /**

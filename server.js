@@ -260,6 +260,62 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // WALLET API ENDPOINTS
+    
+    // Get wallet balance (POST) - Compatible with original API format
+    if ((pathname === '/api/Wallet/getbalance' || pathname === '/api/wallet/getbalance') && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                let jsonBody = body;
+                if (body.includes('}&')) {
+                    jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                }
+                
+                const data = JSON.parse(jsonBody);
+                const userid = data.userid || data.user_id;
+                
+                if (!userid) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, error: 'Missing userid parameter', success: false }));
+                    return;
+                }
+                
+                // Get user from database
+                const user = getUserById(userid);
+                
+                if (!user) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, error: 'User not found', success: false }));
+                    return;
+                }
+                
+                // Return balance data in original API format
+                const balanceData = {
+                    code: 1,
+                    success: true,
+                    data: {
+                        usdt: user.usdt || 0,
+                        btc: user.btc || 0,
+                        eth: user.eth || 0,
+                        usdc: user.usdc || 0,
+                        pyusd: user.pyusd || 0,
+                        sol: user.sol || 0
+                    }
+                };
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(balanceData));
+            } catch (e) {
+                console.error('[wallet-getbalance] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, error: e.message, success: false }));
+            }
+        });
+        return;
+    }
+
     // ADMIN AUTHENTICATION ENDPOINTS
 
     // Admin Login
@@ -597,6 +653,263 @@ const server = http.createServer((req, res) => {
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, stats }));
+        return;
+    }
+
+    // TRADE API ENDPOINTS
+
+    // Trade/Buy endpoint - create a new trade order
+    if (pathname === '/api/trade/buy' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                let jsonBody = body;
+                if (body.includes('}&')) {
+                    jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                }
+
+                const data = JSON.parse(jsonBody);
+                const { userid, username, fangxiang, miaoshu, biming, num, buyprice, zengjia, jianshao } = data;
+
+                if (!userid || !username || !biming || !num || !buyprice) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'Missing required fields' }));
+                    return;
+                }
+
+                // Create trade record
+                const tradeRecord = {
+                    id: Date.now().toString(),
+                    userid,
+                    username,
+                    biming,
+                    fangxiang: fangxiang == 1 ? 'upward' : 'downward',
+                    miaoshu,
+                    num,
+                    buyprice,
+                    zengjia,
+                    jianshao,
+                    status: 'pending',
+                    created_at: new Date().toISOString()
+                };
+
+                // Save to trades records file
+                const tradesFilePath = path.join(__dirname, 'trades_records.json');
+                let tradesData = [];
+                if (fs.existsSync(tradesFilePath)) {
+                    const fileContent = fs.readFileSync(tradesFilePath, 'utf-8');
+                    try {
+                        tradesData = JSON.parse(fileContent);
+                    } catch (e) {
+                        tradesData = [];
+                    }
+                }
+
+                tradesData.push(tradeRecord);
+                fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
+
+                console.error('[trade-buy] ✓ Trade record saved:', tradeRecord.id);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: tradeRecord.id }));
+            } catch (e) {
+                console.error('[trade-buy] ✗ Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: e.message }));
+            }
+        });
+        return;
+    }
+
+    // Get trade list - proxy to external API
+    if (pathname === '/api/Trade/gettradlist' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // Forward request to external API
+                const externalApiUrl = 'https://api.bvoxf.com/api/Trade/gettradlist';
+                const https = require('https');
+                const externalReq = https.request(externalApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Content-Length': Buffer.byteLength(body)
+                    }
+                }, (externalRes) => {
+                    let responseData = '';
+                    externalRes.on('data', chunk => { responseData += chunk; });
+                    externalRes.on('end', () => {
+                        res.writeHead(externalRes.statusCode, { 'Content-Type': 'application/json' });
+                        res.end(responseData);
+                    });
+                });
+
+                externalReq.on('error', (err) => {
+                    console.error('[gettradlist] External API error:', err.message);
+                    res.writeHead(503, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'External API unavailable' }));
+                });
+
+                externalReq.write(body);
+                externalReq.end();
+            } catch (e) {
+                console.error('[gettradlist] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: e.message }));
+            }
+        });
+        return;
+    }
+
+    // Get coin data - proxy to external API
+    if (pathname === '/api/Trade/getcoin_data' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // Forward request to external API
+                const externalApiUrl = 'https://api.bvoxf.com/api/Trade/getcoin_data';
+                const https = require('https');
+                const externalReq = https.request(externalApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Content-Length': Buffer.byteLength(body)
+                    }
+                }, (externalRes) => {
+                    let responseData = '';
+                    externalRes.on('data', chunk => { responseData += chunk; });
+                    externalRes.on('end', () => {
+                        res.writeHead(externalRes.statusCode, { 'Content-Type': 'application/json' });
+                        res.end(responseData);
+                    });
+                });
+
+                externalReq.on('error', (err) => {
+                    console.error('[getcoin_data] External API error:', err.message);
+                    res.writeHead(503, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'External API unavailable' }));
+                });
+
+                externalReq.write(body);
+                externalReq.end();
+            } catch (e) {
+                console.error('[getcoin_data] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: e.message }));
+            }
+        });
+        return;
+    }
+
+    // Get order status
+    if (pathname === '/api/trade/getorder' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const orderId = data.id;
+
+                // Get trade record from file
+                const tradesFilePath = path.join(__dirname, 'trades_records.json');
+                let orderStatus = 0; // Default: unspecified
+                
+                if (fs.existsSync(tradesFilePath)) {
+                    const fileContent = fs.readFileSync(tradesFilePath, 'utf-8');
+                    const tradesData = JSON.parse(fileContent);
+                    const trade = tradesData.find(t => t.id === orderId);
+                    
+                    if (trade && trade.status) {
+                        if (trade.status === 'win') orderStatus = 1;
+                        else if (trade.status === 'loss') orderStatus = 2;
+                    }
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: orderStatus }));
+            } catch (e) {
+                console.error('[getorder] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: e.message }));
+            }
+        });
+        return;
+    }
+
+    // Set order result (win/loss)
+    if (pathname === '/api/trade/setordersy' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const orderId = data.id;
+                const shuying = data.shuying; // 1 = win, 2 = loss
+
+                // Update trade record
+                const tradesFilePath = path.join(__dirname, 'trades_records.json');
+                if (fs.existsSync(tradesFilePath)) {
+                    const fileContent = fs.readFileSync(tradesFilePath, 'utf-8');
+                    let tradesData = JSON.parse(fileContent);
+                    
+                    const trade = tradesData.find(t => t.id === orderId);
+                    if (trade) {
+                        trade.status = shuying === 1 ? 'win' : 'loss';
+                        trade.updated_at = new Date().toISOString();
+                        fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
+                    }
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: 'Order updated' }));
+            } catch (e) {
+                console.error('[setordersy] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: e.message }));
+            }
+        });
+        return;
+    }
+
+    // Get order result/profit
+    if (pathname === '/api/trade/getorderjs' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const orderId = data.id;
+
+                // Get trade record from file
+                const tradesFilePath = path.join(__dirname, 'trades_records.json');
+                let profit = 'wjs'; // 'wjs' = waiting, default
+                
+                if (fs.existsSync(tradesFilePath)) {
+                    const fileContent = fs.readFileSync(tradesFilePath, 'utf-8');
+                    const tradesData = JSON.parse(fileContent);
+                    const trade = tradesData.find(t => t.id === orderId);
+                    
+                    if (trade && trade.status) {
+                        if (trade.status === 'win') {
+                            // Calculate profit based on percentage (70%, 100%, etc.)
+                            const profitPercent = parseInt(trade.miaoshu) / 300 * 100; // Example calculation
+                            profit = (parseFloat(trade.num) * (profitPercent / 100)).toFixed(2);
+                        } else if (trade.status === 'loss') {
+                            profit = -parseFloat(trade.num).toFixed(2);
+                        }
+                    }
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: profit }));
+            } catch (e) {
+                console.error('[getorderjs] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: e.message }));
+            }
+        });
         return;
     }
 

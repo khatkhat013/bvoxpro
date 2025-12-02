@@ -1,4 +1,4 @@
-const apiurl = "https://api.bvoxf.com/api";
+const apiurl = "http://localhost:3000/api";
 document.title = "Bvox";
 
 
@@ -111,13 +111,24 @@ window.addEventListener('load', async () => {
     var ylang = Cookies.get('ylang');
     if(ylang !== null && ylang !== undefined && ylang !== ''){}else{Cookies.set('ylang', 'en',{expires: 30});ylang='en';}
 
-
     $.getJSON('/lang/' + ylang + '.json', function(json) {
         $("[data-translate]").each(function() {
             var key = $(this).data("translate");
             if (json[key]) {
                 $(this).text(json[key]);
             }
+        });
+    }).fail(function(error) {
+        console.warn('Failed to load language file for: ' + ylang + ', falling back to English');
+        $.getJSON('/lang/en.json', function(json) {
+            $("[data-translate]").each(function() {
+                var key = $(this).data("translate");
+                if (json[key]) {
+                    $(this).text(json[key]);
+                }
+            });
+        }).fail(function() {
+            console.error('Failed to load even the fallback English language file');
         });
     });
 
@@ -278,7 +289,8 @@ var loadingInProgress = false;  // 标志位，表示语言文件是否正在加
 function loadTranslationsSync() {
     if (!translationsLoaded && !loadingInProgress) {
         loadingInProgress = true;
-        var filePath = '/lang/' + Cookies.get('ylang') + '.json';
+        var lang = Cookies.get('ylang') || 'en';
+        var filePath = '/lang/' + lang + '.json';
 
         // 通过同步方式加载JSON数据
         $.ajax({
@@ -289,9 +301,27 @@ function loadTranslationsSync() {
                 translations = json;
                 translationsLoaded = true;
                 loadingInProgress = false;
+                console.log('Language file loaded successfully: ' + filePath);
             },
-            error: function() {
-                console.error("无法加载语言文件: " + filePath);
+            error: function(xhr, status, error) {
+                console.error("Unable to load language file: " + filePath + " | Error: " + error);
+                // Fallback to English if the language file fails to load
+                console.log("Attempting fallback to English...");
+                $.ajax({
+                    url: '/lang/en.json',
+                    dataType: 'json',
+                    async: false,
+                    success: function(json) {
+                        translations = json;
+                        translationsLoaded = true;
+                        console.log('Fallback to English language file successful');
+                    },
+                    error: function() {
+                        console.error("Failed to load even the fallback English language file");
+                        translations = {}; // Use empty object if all fails
+                        translationsLoaded = true;
+                    }
+                });
                 loadingInProgress = false;
             }
         });
@@ -303,7 +333,18 @@ function gy(ykey) {
     if (!translationsLoaded) {
         loadTranslationsSync();  // 首次调用时加载翻译文件
     }
-    return translations[ykey] || ykey;  // 返回翻译或原始 key
+    
+    // Return translation if available, otherwise return the original key
+    if (translations[ykey]) {
+        return translations[ykey];
+    }
+    
+    // Log a warning if translation is missing but don't break
+    if (typeof ykey === 'string' && ykey.length > 0) {
+        console.warn('Translation missing for key: ' + ykey);
+    }
+    
+    return ykey;  // 返回翻译或原始 key
 }
 
 var setFontSize = function(){

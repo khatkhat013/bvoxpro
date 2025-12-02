@@ -49,6 +49,34 @@ function writeUsersDB(data) {
     fs.writeFileSync(USERS_DB_PATH, JSON.stringify(data, null, 2));
 }
 
+// Generate next 5-digit user ID starting from 342016
+function generateNextUserId() {
+    const wallets = readWalletDB();
+    const users = readUsersDB();
+    
+    // Get all numeric IDs from both wallets and users
+    const allIds = [];
+    
+    wallets.forEach(w => {
+        if (w.userid && !isNaN(w.userid)) {
+            allIds.push(parseInt(w.userid));
+        }
+    });
+    
+    users.forEach(u => {
+        if (u.userid && !isNaN(u.userid)) {
+            allIds.push(parseInt(u.userid));
+        }
+        if (u.uid && !isNaN(u.uid)) {
+            allIds.push(parseInt(u.uid));
+        }
+    });
+    
+    // Find max ID or start from 342016
+    const maxId = allIds.length > 0 ? Math.max(...allIds) : 342015;
+    return String(maxId + 1);
+}
+
 // Connect or register wallet
 function connectWallet(walletAddress, chainId = 'ethereum') {
     initializeWalletDB();
@@ -65,14 +93,15 @@ function connectWallet(walletAddress, chainId = 'ethereum') {
         return {
             success: true,
             isNew: false,
-            uid: existingWallet.uid,
+            uid: existingWallet.userid || existingWallet.uid,
             message: 'Wallet connected successfully',
             wallet: existingWallet
         };
     } else {
-        // New wallet - create new UID and user
-        const newUID = uuidv4();
+        // New wallet - create new numeric ID starting from 342016
+        const newUID = generateNextUserId();
         const newWallet = {
+            userid: newUID,
             uid: newUID,
             address: walletAddress_lower,
             chainId: chainId,
@@ -87,13 +116,22 @@ function connectWallet(walletAddress, chainId = 'ethereum') {
 
         // Create new user account
         const newUser = {
+            userid: newUID,
             uid: newUID,
             wallet_address: walletAddress_lower,
-            username: `user_${newUID.substring(0, 8)}`,
+            username: `user_${newUID}`,
             email: null,
             balance: 0,
             total_invested: 0,
             total_income: 0,
+            balances: {
+                usdt: 0,
+                btc: 0,
+                eth: 0,
+                usdc: 0,
+                pyusd: 0,
+                sol: 0
+            },
             created_at: new Date().toISOString(),
             last_login: new Date().toISOString(),
             status: 'active'

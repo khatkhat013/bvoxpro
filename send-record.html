@@ -95,9 +95,56 @@
                 color: #999;
                 line-height: 1.2;
             }
+            .y-re-box-status {
+                font-size: 0.7rem;
+                padding: 3px 8px;
+                border-radius: 3px;
+                font-weight: 600;
+                display: inline-block;
+                margin-top: 0.2rem;
+            }
+            .y-re-box-status.pending {
+                background: rgba(255, 193, 7, 0.15);
+                color: #ffc107;
+            }
+            .y-re-box-status.completed,
+            .y-re-box-status.approved {
+                background: rgba(76, 175, 80, 0.15);
+                color: #4caf50;
+            }
+            .y-re-box-status.rejected {
+                background: rgba(244, 67, 54, 0.15);
+                color: #f44336;
+            }
             .y-re-box-amount {
                 flex-shrink: 0;
                 text-align: right;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 0.5rem;
+            }
+            .y-re-box-status-badge {
+                font-size: 0.65rem;
+                padding: 4px 10px;
+                border-radius: 12px;
+                font-weight: 600;
+                display: inline-block;
+                text-transform: uppercase;
+                letter-spacing: 0.3px;
+            }
+            .y-re-box-status-badge.pending {
+                background: rgba(255, 193, 7, 0.15);
+                color: #ffc107;
+            }
+            .y-re-box-status-badge.completed,
+            .y-re-box-status-badge.approved {
+                background: rgba(76, 175, 80, 0.15);
+                color: #4caf50;
+            }
+            .y-re-box-status-badge.rejected {
+                background: rgba(244, 67, 54, 0.15);
+                color: #f44336;
             }
             .y-re-box-amount-value {
                 font-weight: 700;
@@ -173,6 +220,7 @@
                         minute: '2-digit'
                     });
 
+                    const status = record.status || 'pending';
                     html += `
                         <div class="y-re-box">
                             <div class="y-re-box-left">
@@ -186,6 +234,7 @@
                                 </div>
                             </div>
                             <div class="y-re-box-amount">
+                                <div class="y-re-box-status-badge ${status}">${status}</div>
                                 <div class="y-re-box-amount-value">-${record.quantity.toFixed(2)}</div>
                             </div>
                         </div>

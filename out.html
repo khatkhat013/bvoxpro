@@ -96,12 +96,31 @@
                 $('#y-out-shuliang').attr('placeholder', gy('请输入数量'));
 
                 var userid = Cookies.get('userid');
-                $.post(apiurl + "/Wallet/getbalance",{
-                    'userid':userid,
-                    'bm':biming
-                },function(res){
-                    if(res.code == 1){
-                       $('#y-out-ye').text(Number(res.data[biming]).toFixed(xsw[biming]));
+                $.ajax({
+                    url: 'http://localhost:3000/api/Wallet/getbalance',
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        'userid': userid,
+                        'bm': biming
+                    },
+                    success: function(res){
+                        if(res.code == 1 || res.success == true){
+                            var balanceData = res.data || res;
+                            $('#y-out-ye').text(Number(balanceData[biming] || 0).toFixed(xsw[biming]));
+                        }
+                    },
+                    error: function(err){
+                        console.error('Error fetching balance from localhost:', err);
+                        // Fallback to external API
+                        $.post(apiurl + "/Wallet/getbalance",{
+                            'userid':userid,
+                            'bm':biming
+                        },function(res){
+                            if(res.code == 1){
+                               $('#y-out-ye').text(Number(res.data[biming]).toFixed(xsw[biming]));
+                            }
+                        });
                     }
                 });
             });

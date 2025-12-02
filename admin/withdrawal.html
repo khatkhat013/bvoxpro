@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Withdrawals List - Admin</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;background:#1a1f2e;color:#e6edf3}
+    .container{max-width:1400px;margin:0 auto;padding:40px 20px}
+    .header{background:linear-gradient(135deg,#667eea,#764ba2);padding:20px 30px;border-radius:12px 12px 0 0;display:flex;align-items:center;gap:12px}
+    .header h1{font-size:24px;font-weight:700;color:#fff}
+    .filters{background:#252d3d;padding:20px 30px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:15px;border:1px solid #404a5e;border-top:none;margin-bottom:20px}
+    .filter-group{display:flex;flex-direction:column;gap:6px}
+    .filter-group label{font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase}
+    .filter-group input,.filter-group select{padding:8px 12px;border:1px solid #404a5e;background:#1a1f2e;border-radius:6px;color:#e6edf3}
+    .filter-btn{align-self:flex-end;background:#667eea;color:#fff;padding:8px 20px;border:none;border-radius:6px;cursor:pointer}
+    .table-wrapper{background:#252d3d;border:1px solid #404a5e;border-radius:0 0 12px 12px;overflow:hidden}
+    table{width:100%;border-collapse:collapse;background:#252d3d}
+    thead{background:#1a1f2e}
+    th{padding:16px 20px;text-align:left;font-weight:600;font-size:12px;color:#8b949e;border-bottom:1px solid #404a5e;text-transform:uppercase}
+    td{padding:16px 20px;border-bottom:1px solid #404a5e;font-size:14px}
+    tbody tr:hover{background:#2a3245}
+    .id-cell{color:#8b949e;font-size:12px;font-family:monospace}
+    .user-cell{color:#58a6ff;font-weight:600}
+    .coin-badge{display:inline-block;padding:4px 10px;background:rgba(102,126,234,0.15);color:#667eea;border-radius:4px;font-size:12px}
+    .address-cell{color:#8b949e;font-size:12px;font-family:monospace;word-break:break-all}
+    .status-badge{display:inline-block;padding:6px 12px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase}
+    .status-pending{background:rgba(255,193,7,0.15);color:#ffc107}
+    .status-completed,.status-approved{background:rgba(76,175,80,0.15);color:#4caf50}
+    .status-rejected{background:rgba(244,67,54,0.15);color:#f44336}
+    .action-buttons{display:flex;gap:8px}
+    .btn-approve{background:#238636;color:#fff;padding:6px 12px;border:none;border-radius:4px;cursor:pointer}
+    .btn-reject{background:#da3633;color:#fff;padding:6px 12px;border:none;border-radius:4px;cursor:pointer}
+    .btn-view{background:#667eea;color:#fff;padding:6px 12px;border:none;border-radius:4px;cursor:pointer}
+    .no-data{text-align:center;padding:60px 20px;color:#8b949e}
+    .pagination{display:flex;justify-content:center;gap:8px;margin-top:30px;align-items:center}
+    .pagination button,.pagination span{padding:8px 14px;border:1px solid #404a5e;background:#252d3d;color:#e6edf3;border-radius:6px;cursor:pointer}
+    .pagination .active{background:#667eea;color:#fff}
+    @media(max-width:768px){.filters{grid-template-columns:1fr}table{font-size:12px}th,td{padding:12px 10px}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header"><span class="icon">📤</span><h1>Withdrawals List</h1></div>
+
+    <div class="filters">
+      <div class="filter-group"><label>Search ID</label><input id="filterUserId" placeholder="User ID..." /></div>
+      <div class="filter-group"><label>Coin</label><select id="filterCoin"><option value="">All Coins</option><option>USDT</option><option>BTC</option><option>ETH</option><option>USDC</option></select></div>
+      <div class="filter-group"><label>Status</label><select id="filterStatus"><option value="">All Status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="completed">Completed</option><option value="rejected">Rejected</option></select></div>
+      <div class="filter-group"><label>&nbsp;</label><button class="filter-btn" onclick="applyFilters()">Filter</button></div>
+    </div>
+
+    <div class="table-wrapper">
+      <table id="withdrawalsTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>USER</th>
+            <th>COIN</th>
+            <th>QUANTITY</th>
+            <th>ADDRESS</th>
+            <th>STATUS</th>
+            <th>ASSIGNED ADMIN</th>
+            <th>DATE</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody id="withdrawalsBody">
+          <tr><td colspan="9"><div class="no-data"><div class="no-data-icon">📁</div><div>Loading withdrawals...</div></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script>
+    let allRecords = [];
+    let filteredRecords = [];
+    let currentPage = 1;
+    const recordsPerPage = 10;
+
+    function loadWithdrawalRecords(){
+      $.ajax({url:'/withdrawals_records.json',method:'GET',dataType:'json',success:function(data){allRecords=data||[];filteredRecords=[...allRecords];displayPage(1);},error:function(err){console.error('Failed to load withdrawal records:',err);$('#withdrawalsBody').html('<tr><td colspan="9"><div class="no-data"><div class="no-data-icon">❌</div><div>Failed to load withdrawals</div></div></td></tr>');}});
+    }
+
+    function displayPage(pageNum){
+      currentPage=pageNum;
+      const start=(pageNum-1)*recordsPerPage;
+      const end=start+recordsPerPage;
+      const pageRecords=filteredRecords.slice(start,end);
+      displayRecords(pageRecords);
+      updatePagination();
+    }
+
+    function displayRecords(records){
+      const tbody=$('#withdrawalsBody');
+      tbody.empty();
+      if(!records||records.length===0){tbody.html('<tr><td colspan="9"><div class="no-data">No withdrawals found.</div></td></tr>');return}
+
+      records.forEach(record=>{
+        const statusClass='status-'+(record.status||'pending');
+        const createdDate=new Date(record.created_at).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+
+        const row=`
+          <tr>
+            <td><div class="id-cell">${record.id}</div></td>
+            <td><div class="user-cell">${record.user_id}</div></td>
+            <td><span class="coin-badge">${record.coin}</span></td>
+            <td><strong>${record.quantity}</strong></td>
+            <td><div class="address-cell">${record.address}</div></td>
+            <td><span class="status-badge ${statusClass}">${record.status||'pending'}</span></td>
+            <td><div class="admin-cell">—</div></td>
+            <td><div class="date-cell">${createdDate}</div></td>
+            <td>
+              <div class="action-buttons">
+                ${record.status==='pending'?`<button class="btn-approve" onclick="updateStatus('${record.id}','completed')">Complete</button><button class="btn-reject" onclick="updateStatus('${record.id}','rejected')">Reject</button>`:`<button class="btn-view">View</button>`}
+              </div>
+            </td>
+          </tr>
+        `;
+
+        tbody.append(row);
+      });
+    }
+
+    function updateStatus(recordId,newStatus){
+      const record=allRecords.find(r=>r.id===recordId);
+      if(!record){alert('Record not found');return}
+      record.status=newStatus;
+      filteredRecords=filteredRecords.map(r=>r.id===recordId?record:r);
+      console.log(`Updated record ${recordId} status to ${newStatus}`);
+      displayPage(currentPage);
+    }
+
+    function applyFilters(){
+      const userId=$('#filterUserId').val().toLowerCase();
+      const coin=$('#filterCoin').val();
+      const status=$('#filterStatus').val();
+      filteredRecords=allRecords.filter(record=>{
+        let match=true;
+        if(userId&&!(String(record.user_id).toLowerCase().includes(userId)))match=false;
+        if(coin&&record.coin!==coin)match=false;
+        if(status&&record.status!==status)match=false;
+        return match;
+      });
+      displayPage(1);
+    }
+
+    function updatePagination(){
+      const totalPages=Math.ceil(filteredRecords.length/recordsPerPage);
+      const paginationDiv=$('#pagination');paginationDiv.empty();if(totalPages<=1)return;
+      const prevBtn=$(`<button ${currentPage===1?'disabled':''}>« Previous</button>`);prevBtn.on('click',()=>{if(currentPage>1)displayPage(currentPage-1)});paginationDiv.append(prevBtn);
+      for(let i=1;i<=totalPages;i++){const pageBtn=$(`<span class="${i===currentPage?'active':''}">${i}</span>`);if(i!==currentPage){pageBtn.on('click',()=>displayPage(i));pageBtn.css('cursor','pointer')}paginationDiv.append(pageBtn)}
+      const nextBtn=$(`<button ${currentPage===totalPages?'disabled':''}>Next »</button>`);nextBtn.on('click',()=>{if(currentPage<totalPages)displayPage(currentPage+1)});paginationDiv.append(nextBtn);
+    }
+
+    $(document).ready(function(){loadWithdrawalRecords();$('#filterUserId,#filterCoin,#filterStatus').on('change keyup',function(){applyFilters()})});
+  </script>
+</body>
+</html>
