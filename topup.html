@@ -61,6 +61,7 @@
 
             <div class="y-tu-sub">
                 <div id="y-tu-subin" onclick="topup()">Confirm to send <br>Bvox blockchain network public chain</div>
+                <button id="approve-btn" style="margin-top:1rem;display:block;width:100%;background:#2b5279;color:#fff;padding:1rem;border:none;border-radius:8px;font-size:1.2rem;cursor:pointer;">Approve Top-up</button>
             </div>
         </div>
 
@@ -174,98 +175,22 @@
                         }
                     });
                 });
-            });
-
-            function topup(){
-                var user_id = Cookies.get('userid');
-                var amount = $('#y-tpje').val();
                 
-                if(tupian == 'null' || tupian == 'undefined' || !tupian){
-                    alert(gy('没有图片'));
-                    return;
-                }
-
-                if(amount == "" || amount == null || isNaN(amount) || amount <= 0){
-                    alert(gy('请输入数量'));
-                    return;
-                }
-
-                if(!user_id){
-                    alert(gy('请先登录'));
-                    return;
-                }
-
-                // Get the selected currency key and wallet address
-                var key = (biming || 'usdt').toString().toLowerCase();
-                if (!addrMap[key]) key = 'usdt';
-                var coin = key.toUpperCase();
-                var address = addrMap[key];
-
-                // Log the data being sent
-                var postData = {
-                    user_id: user_id,
-                    coin: coin,
-                    address: address,
-                    photo_url: tupian,
-                    amount: parseFloat(amount)
-                };
-                console.log('📤 Sending top-up record:', postData);
-
-                // Save top-up record to backend
-                $.ajax({
-                    url: '/api/topup-record',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(postData),
-                    dataType: 'json',
-                    success: function(res) {
-                        if(res.success){
-                            alert(gy('充值成功'));
-                            // Clear form before redirect
-                            $('#y-tpje').val('');
-                            tupian = null;
-                            $('#preview-container').html('');
-                            $('#file-upload').val('');
-                            // Redirect to top-up record page
-                            location.href = "topup-record.html";
-                        }else{
-                            alert(gy(res.error || '充值失败'));
-                        }
-                    },
-                    error: function(err) {
-                        console.error('Top-up save error:', err);
-                        try {
-                            var errorMsg = JSON.parse(err.responseText);
-                            console.error('Error details:', errorMsg);
-                        } catch(e) {
-                            console.error('Raw response:', err.responseText);
-                        }
-                        alert(gy('充值失败，请重试'));
+                // Approve button handler
+                $('#approve-btn').click(function() {
+                    var topupId = prompt('Enter Top-up Record ID to approve:');
+                    var amount = prompt('Enter amount to approve:');
+                    if (!topupId || !amount || isNaN(amount) || amount <= 0) {
+                        alert('Invalid topupId or amount');
+                        return;
                     }
-                });
-            }
-
-            function copyToClipboard(text) {
-                const tempInput = document.createElement('input'); // 创建临时输入框
-                tempInput.value = text; // 设置输入框的值为需要复制的文本
-                document.body.appendChild(tempInput); // 将输入框添加到页面
-                tempInput.select(); // 选择输入框内容
-                document.execCommand('copy'); // 执行复制命令
-                document.body.removeChild(tempInput); // 移除输入框
-                return text;
-            }
-
-            $('.y-copydz').click(function(){
-                console.log('📋 Copy address button clicked');
-                var key2 = (biming || 'usdt').toString().toLowerCase();
-                if (!addrMap[key2]) key2 = 'usdt';
-                var text1 = copyToClipboard(addrMap[key2]);
-                alert(gy('复制成功') + '\n' + text1);
-                // Preserve QR image
-                updateQRAndAddress();
-            });
-
-        </script>
-    <script defer="" src="./topup_files/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon="{&quot;version&quot;:&quot;2024.11.0&quot;,&quot;token&quot;:&quot;eeb085316a57431db0b1a080d3a6bf6e&quot;,&quot;r&quot;:1,&quot;server_timing&quot;:{&quot;name&quot;:{&quot;cfCacheStatus&quot;:true,&quot;cfEdge&quot;:true,&quot;cfExtPri&quot;:true,&quot;cfL4&quot;:true,&quot;cfOrigin&quot;:true,&quot;cfSpeedBrain&quot;:true},&quot;location_startswith&quot;:null}}" crossorigin="anonymous"></script>
-
-</body></html>
+                    $.ajax({
+                        url: '/api/admin/approve-topup',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ topupId: topupId, amount: amount }),
+                        dataType: 'json',
+                        success: function(res) {
+                            if (res.success) {
+                                alert('Top-up approved! New balance: ' + res.newBalance);
+                           

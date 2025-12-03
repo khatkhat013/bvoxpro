@@ -1,3 +1,6 @@
+// NOTE: The file uses a single `http.createServer` routing approach below.
+// The legacy Express-style `app.post` usage was removed and the same
+// functionality is implemented inside the server routing further down.
 /**
  * Simple Development Server for BVOX Finance
  * Serves static files and handles CORS
@@ -262,6 +265,48 @@ const server = http.createServer((req, res) => {
 
     // WALLET API ENDPOINTS
     
+    // Get wallet balance (GET) - accept ?userid= for browser/direct requests
+    if ((pathname === '/api/Wallet/getbalance' || pathname === '/api/wallet/getbalance') && req.method === 'GET') {
+        try {
+            const queryParams = url.parse(req.url, true).query;
+            const userid = queryParams.userid || queryParams.user_id;
+
+            if (!userid) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, error: 'Missing userid parameter', success: false }));
+                return;
+            }
+
+            const user = getUserById(userid);
+            if (!user) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, error: 'User not found', success: false }));
+                return;
+            }
+
+            const balanceData = {
+                code: 1,
+                success: true,
+                data: {
+                    usdt: user.usdt || 0,
+                    btc: user.btc || 0,
+                    eth: user.eth || 0,
+                    usdc: user.usdc || 0,
+                    pyusd: user.pyusd || 0,
+                    sol: user.sol || 0
+                }
+            };
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(balanceData));
+        } catch (e) {
+            console.error('[wallet-getbalance-GET] Error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 0, error: e.message, success: false }));
+        }
+        return;
+    }
+
     // Get wallet balance (POST) - Compatible with original API format
     if ((pathname === '/api/Wallet/getbalance' || pathname === '/api/wallet/getbalance') && req.method === 'POST') {
         let body = '';
@@ -272,8 +317,22 @@ const server = http.createServer((req, res) => {
                 if (body.includes('}&')) {
                     jsonBody = body.substring(0, body.indexOf('}&') + 1);
                 }
-                
-                const data = JSON.parse(jsonBody);
+
+                // Try to parse JSON first, fall back to urlencoded (jQuery default)
+                let data;
+                try {
+                    data = JSON.parse(jsonBody);
+                } catch (parseErr) {
+                    data = {};
+                    // parse x-www-form-urlencoded like: userid=123&foo=bar
+                    jsonBody.split('&').forEach(pair => {
+                        if (!pair) return;
+                        const parts = pair.split('=');
+                        const key = decodeURIComponent(parts[0] || '').trim();
+                        const val = decodeURIComponent((parts[1] || '').replace(/\+/g, ' ')).trim();
+                        if (key) data[key] = val;
+                    });
+                }
                 const userid = data.userid || data.user_id;
                 
                 if (!userid) {
@@ -488,6 +547,69 @@ const server = http.createServer((req, res) => {
         });
         return;
     }
+
+            // Approve top-up: update status and add to user balance (admin)
+            if (pathname === '/api/admin/approve-topup' && req.method === 'POST') {
+                let body = '';
+                req.on('data', chunk => { body += chunk; });
+                req.on('end', () => {
+                    try {
+                        // Handle legacy jQuery body format
+                        if (body.includes('}&')) body = body.substring(0, body.indexOf('}&') + 1);
+                        const data = JSON.parse(body);
+                        const { topupId, amount } = data;
+                        if (!topupId || !amount) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: false, error: 'Missing topupId or amount' }));
+                            return;
+                        }
+
+                        const topupRecordsPath = './topup_records.json';
+                        const usersPath = './users.json';
+                        let topupRecords = [];
+                        let users = [];
+                        if (fs.existsSync(topupRecordsPath)) {
+                            topupRecords = JSON.parse(fs.readFileSync(topupRecordsPath));
+                        }
+                        if (fs.existsSync(usersPath)) {
+                            users = JSON.parse(fs.readFileSync(usersPath));
+                        }
+
+                        const topup = topupRecords.find(r => r.id === topupId);
+                        if (!topup) {
+                            res.writeHead(404, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: false, error: 'Topup record not found' }));
+                            return;
+                        }
+                        if (topup.status === 'complete') {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: false, error: 'Already completed' }));
+                            return;
+                        }
+
+                        // Mark complete and update user balance
+                        topup.status = 'complete';
+                        const user = users.find(u => u.id === topup.user_id);
+                        if (!user) {
+                            res.writeHead(404, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: false, error: 'User not found' }));
+                            return;
+                        }
+
+                        user.balance = (parseFloat(user.balance) || 0) + parseFloat(amount);
+
+                        fs.writeFileSync(topupRecordsPath, JSON.stringify(topupRecords, null, 2));
+                        fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: true, newBalance: user.balance }));
+                    } catch (err) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: err.message }));
+                    }
+                });
+                return;
+            }
 
     // Add withdrawal record for user (admin)
     if (pathname === '/api/admin/add-withdrawal' && req.method === 'POST') {
@@ -796,6 +918,94 @@ const server = http.createServer((req, res) => {
                 externalReq.end();
             } catch (e) {
                 console.error('[getcoin_data] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: e.message }));
+            }
+        });
+        return;
+    }
+
+    // Get all coin data used by frontend (Wallet/getcoin_all_data)
+    if ((pathname === '/api/Wallet/getcoin_all_data' || pathname === '/api/wallet/getcoin_all_data') && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // Use the new external endpoint for coin price data
+                const externalApiUrls = [
+                    'https://api.bitcryptoforest.com/api/kline/getAllProduct'
+                ];
+
+                const https = require('https');
+
+                const tryProxy = (index) => {
+                    if (index >= externalApiUrls.length) {
+                        // External APIs unavailable — return a small local fallback dataset
+                        const sampleData = [
+                            { symbol: 'btcusdt', close: 30000 },
+                            { symbol: 'ethusdt', close: 2000 },
+                            { symbol: 'usdcusdt', close: 1 },
+                            { symbol: 'pyusdusdt', close: 1 },
+                            { symbol: 'solusdt', close: 20 }
+                        ];
+
+                        const fallback = {
+                            code: 1,
+                            data: {
+                                data: sampleData
+                            }
+                        };
+
+                        console.warn('[getcoin_all_data] External APIs down — returning local fallback prices');
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify(fallback));
+                        return;
+                    }
+
+                    const externalApiUrl = externalApiUrls[index];
+                    // Only log errors and fallbacks, not routine proxy requests
+                    const externalReq = https.request(externalApiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'Content-Length': Buffer.byteLength(body)
+                        }
+                    }, (externalRes) => {
+                        let responseData = '';
+                        externalRes.on('data', chunk => { responseData += chunk; });
+                        externalRes.on('end', () => {
+                            // Log external response status and a truncated body for diagnostics
+
+
+                            // If external returns 200, forward it; otherwise try next
+                            if (externalRes.statusCode >= 200 && externalRes.statusCode < 300) {
+                                res.writeHead(externalRes.statusCode, { 'Content-Type': 'application/json' });
+                                res.end(responseData);
+                            } else {
+                                // Only log non-200 responses
+                                try {
+                                    const snippet = responseData ? responseData.substring(0, 300) : '';
+                                    console.error('[getcoin_all_data] External response error from', externalApiUrl, 'status=', externalRes.statusCode, 'bodySnippet=', snippet.replace(/\n/g, '\\n'));
+                                } catch (logErr) {
+                                    console.error('[getcoin_all_data] Error logging external response:', logErr.message);
+                                }
+                                tryProxy(index + 1);
+                            }
+                        });
+                    });
+
+                    externalReq.on('error', (err) => {
+                        console.error('[getcoin_all_data] External request error for', externalApiUrl, ':', err.message);
+                        tryProxy(index + 1);
+                    });
+
+                    externalReq.write(body);
+                    externalReq.end();
+                };
+
+                tryProxy(0);
+            } catch (e) {
+                console.error('[getcoin_all_data] Error:', e.message);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ code: 0, data: e.message }));
             }
