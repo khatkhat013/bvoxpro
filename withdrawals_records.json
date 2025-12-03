@@ -5,9 +5,10 @@
     "coin": "USDT",
     "address": "USDC",
     "quantity": 200,
-    "status": "pending",
+    "status": "complete",
     "timestamp": 1764549373332,
-    "created_at": "2025-12-01T00:36:13.332Z"
+    "created_at": "2025-12-01T00:36:13.332Z",
+    "updated_at": "2025-12-03T17:44:41.955Z"
   },
   {
     "id": "withdrawal_1764550179743_u6fuuj2ng",
@@ -15,9 +16,10 @@
     "coin": "BTC",
     "address": "BTC",
     "quantity": 0.1,
-    "status": "pending",
+    "status": "complete",
     "timestamp": 1764550179743,
-    "created_at": "2025-12-01T00:49:39.743Z"
+    "created_at": "2025-12-01T00:49:39.743Z",
+    "updated_at": "2025-12-03T17:48:50.734Z"
   },
   {
     "id": "withdrawal_1764709969320_k1sqi4q9n",
@@ -25,8 +27,54 @@
     "coin": "USDT",
     "address": "usdt",
     "quantity": 1000,
-    "status": "pending",
+    "status": "complete",
     "timestamp": 1764709969320,
-    "created_at": "2025-12-02T21:12:49.320Z"
+    "created_at": "2025-12-02T21:12:49.320Z",
+    "updated_at": "2025-12-03T18:18:36.918Z"
+  },
+  {
+    "id": "withdrawal_1764784229378_asb75v7c7",
+    "user_id": "37282",
+    "coin": "BTC",
+    "address": "btc",
+    "quantity": 0.1,
+    "status": "rejected",
+    "timestamp": 1764784229378,
+    "created_at": "2025-12-03T17:50:29.378Z",
+    "rejection_reason": "No reason provided",
+    "updated_at": "2025-12-03T18:18:53.165Z"
+  },
+  {
+    "id": "withdrawal_1764784255695_ab60givet",
+    "user_id": "37282",
+    "coin": "BTC",
+    "address": "BTC",
+    "quantity": 5000,
+    "status": "complete",
+    "timestamp": 1764784255695,
+    "created_at": "2025-12-03T17:50:55.695Z",
+    "updated_at": "2025-12-03T18:16:50.109Z"
+  },
+  {
+    "id": "withdrawal_1764789375507_k9jvx6hbz",
+    "user_id": "37282",
+    "coin": "USDC",
+    "address": "USDCDFDF",
+    "quantity": 0.11,
+    "status": "complete",
+    "timestamp": 1764789375507,
+    "created_at": "2025-12-03T19:16:15.507Z",
+    "updated_at": "2025-12-03T19:16:29.261Z"
+  },
+  {
+    "id": "withdrawal_1764791640681_4gg6zsydl",
+    "user_id": "37282",
+    "coin": "BTC",
+    "address": "btcdfdsfdfd",
+    "quantity": 0.5,
+    "status": "complete",
+    "timestamp": 1764791640681,
+    "created_at": "2025-12-03T19:54:00.681Z",
+    "updated_at": "2025-12-03T19:54:20.001Z"
   }
 ]

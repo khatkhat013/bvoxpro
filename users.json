@@ -5,12 +5,12 @@
     "email": "user@example.com",
     "created_at": "2024-01-15T10:30:00Z",
     "balances": {
-      "usdt": 10000,
-      "btc": 2.5,
-      "eth": 50,
-      "usdc": 5000,
+      "usdt": 43000,
+      "btc": 2,
+      "eth": 40,
+      "usdc": 5001,
       "pyusd": 3000,
-      "sol": 1000
+      "sol": 1008
     },
     "status": "active"
   },

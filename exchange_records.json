@@ -31,5 +31,38 @@
     "status": "completed",
     "created_at": "2025-12-02T21:13:04.237Z",
     "timestamp": 1764709984237
+  },
+  {
+    "id": "1764791755690_vy9k72q0m",
+    "user_id": "37282",
+    "from_coin": "ETH",
+    "to_coin": "USDT",
+    "from_amount": 10,
+    "to_amount": 35000,
+    "status": "completed",
+    "created_at": "2025-12-03T19:55:55.690Z",
+    "timestamp": 1764791755690
+  },
+  {
+    "id": "1764792917224_0ftuivyis",
+    "user_id": "37282",
+    "from_coin": "USDT",
+    "to_coin": "SOL",
+    "from_amount": 2000,
+    "to_amount": 8,
+    "status": "completed",
+    "created_at": "2025-12-03T20:15:17.224Z",
+    "timestamp": 1764792917224
+  },
+  {
+    "id": "1764793923127_d4xfw89x8",
+    "user_id": "37282",
+    "from_coin": "ETH",
+    "to_coin": "USDT",
+    "from_amount": 10,
+    "to_amount": 35000,
+    "status": "completed",
+    "created_at": "2025-12-03T20:32:03.127Z",
+    "timestamp": 1764793923127
   }
 ]

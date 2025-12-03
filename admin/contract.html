@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deposits List - Crypto Nest</title>
+    <title>Contract Records - Admin</title>
     <style>
         * {
             margin: 0;
@@ -157,7 +157,7 @@
             font-weight: 600;
         }
 
-        .coin-badge {
+        .contract-badge {
             display: inline-block;
             padding: 4px 10px;
             background: rgba(102, 126, 234, 0.15);
@@ -167,12 +167,19 @@
             font-weight: 600;
         }
 
-        .address-cell {
-            color: #8b949e;
+        .type-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            background: rgba(153, 102, 255, 0.15);
+            color: #9966ff;
+            border-radius: 4px;
             font-size: 12px;
-            font-family: monospace;
-            max-width: 200px;
-            word-break: break-all;
+            font-weight: 600;
+        }
+
+        .amount-cell {
+            color: #58a6ff;
+            font-weight: 600;
         }
 
         .status-badge {
@@ -190,17 +197,22 @@
             color: #ffc107;
         }
 
+        .status-active {
+            background: rgba(76, 175, 80, 0.15);
+            color: #4caf50;
+        }
+
         .status-completed {
             background: rgba(76, 175, 80, 0.15);
             color: #4caf50;
         }
 
-        .status-approved {
-            background: rgba(76, 175, 80, 0.15);
-            color: #4caf50;
+        .status-closed {
+            background: rgba(158, 158, 158, 0.15);
+            color: #9e9e9e;
         }
 
-        .status-rejected {
+        .status-liquidated {
             background: rgba(244, 67, 54, 0.15);
             color: #f44336;
         }
@@ -220,8 +232,6 @@
             gap: 8px;
         }
 
-        .btn-approve,
-        .btn-reject,
         .btn-view {
             padding: 6px 12px;
             border: none;
@@ -230,33 +240,28 @@
             font-weight: 600;
             font-size: 11px;
             transition: all 0.3s;
-        }
-
-        .btn-approve {
-            background: #238636;
-            color: white;
-        }
-
-        .btn-approve:hover {
-            background: #2ea043;
-        }
-
-        .btn-reject {
-            background: #da3633;
-            color: white;
-        }
-
-        .btn-reject:hover {
-            background: #f85149;
-        }
-
-        .btn-view {
             background: #667eea;
             color: white;
         }
 
         .btn-view:hover {
             background: #764ba2;
+        }
+
+        .btn-close {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 11px;
+            transition: all 0.3s;
+            background: #da3633;
+            color: white;
+        }
+
+        .btn-close:hover {
+            background: #f85149;
         }
 
         .no-data {
@@ -392,7 +397,7 @@
 
             td {
                 display: grid;
-                grid-template-columns: 85px 1fr;
+                grid-template-columns: 90px 1fr;
                 align-items: center;
                 padding: 8px 0;
                 border: none;
@@ -414,20 +419,14 @@
                 font-size: 10px;
             }
 
-            .address-cell {
-                max-width: 100%;
-                word-break: break-word;
-            }
-
             .action-buttons {
                 flex-wrap: wrap;
                 gap: 6px;
                 grid-column: 1 / -1;
             }
 
-            .btn-approve,
-            .btn-reject,
-            .btn-view {
+            .btn-view,
+            .btn-close {
                 padding: 8px 12px;
                 font-size: 12px;
                 flex: 1;
@@ -494,10 +493,6 @@
             th, td {
                 padding: 12px 15px;
             }
-
-            .address-cell {
-                max-width: 120px;
-            }
         }
 
         @media (min-width: 769px) {
@@ -511,8 +506,8 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <span class="icon">📊</span>
-            <h1>Deposits List</h1>
+            <span class="icon">📋</span>
+            <h1>Contract Records</h1>
         </div>
 
         <!-- Filters -->
@@ -522,13 +517,12 @@
                 <input type="text" id="filterUserId" placeholder="User ID...">
             </div>
             <div class="filter-group">
-                <label>Coin</label>
-                <select id="filterCoin">
-                    <option value="">All Coins</option>
-                    <option value="USDT">USDT</option>
-                    <option value="BTC">BTC</option>
-                    <option value="ETH">ETH</option>
-                    <option value="USDC">USDC</option>
+                <label>Contract Type</label>
+                <select id="filterType">
+                    <option value="">All Types</option>
+                    <option value="Fixed">Fixed</option>
+                    <option value="Variable">Variable</option>
+                    <option value="Flexible">Flexible</option>
                 </select>
             </div>
             <div class="filter-group">
@@ -536,9 +530,10 @@
                 <select id="filterStatus">
                     <option value="">All Status</option>
                     <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
+                    <option value="active">Active</option>
                     <option value="completed">Completed</option>
-                    <option value="rejected">Rejected</option>
+                    <option value="closed">Closed</option>
+                    <option value="liquidated">Liquidated</option>
                 </select>
             </div>
             <div class="filter-group">
@@ -549,26 +544,26 @@
 
         <!-- Table -->
         <div class="table-wrapper">
-            <table id="depositsTable">
+            <table id="contractsTable">
                 <thead>
                     <tr>
                         <th>ID</th>
                         <th>USER</th>
-                        <th>COIN</th>
+                        <th>CONTRACT TYPE</th>
                         <th>AMOUNT</th>
-                        <th>ADDRESS</th>
+                        <th>TERM (DAYS)</th>
+                        <th>RATE</th>
                         <th>STATUS</th>
-                        <th>ASSIGNED ADMIN</th>
-                        <th>DATE</th>
+                        <th>START DATE</th>
                         <th>ACTION</th>
                     </tr>
                 </thead>
-                <tbody id="depositsBody">
+                <tbody id="contractsBody">
                     <tr>
                         <td colspan="9">
                             <div class="no-data">
                                 <div class="no-data-icon">📁</div>
-                                <div>Loading deposits...</div>
+                                <div>Loading contracts...</div>
                             </div>
                         </td>
                     </tr>
@@ -587,29 +582,47 @@
         let currentPage = 1;
         const recordsPerPage = 10;
 
-        // Load all topup records
-        function loadTopupRecords() {
+        // Sample contract data structure
+        const sampleContracts = [
+            {
+                id: 'CTR-001',
+                user_id: 'USR-001',
+                type: 'Fixed',
+                amount: 5000,
+                term: 30,
+                rate: 12.5,
+                status: 'active',
+                created_at: new Date().toISOString()
+            },
+            {
+                id: 'CTR-002',
+                user_id: 'USR-002',
+                type: 'Variable',
+                amount: 10000,
+                term: 90,
+                rate: 10.8,
+                status: 'active',
+                created_at: new Date().toISOString()
+            }
+        ];
+
+        // Load contract records
+        function loadContractRecords() {
+            // Try to fetch from server, fallback to sample data
             $.ajax({
-                url: '/topup_records.json',
+                url: '/contract_records.json',
                 method: 'GET',
                 dataType: 'json',
                 success: function(data) {
-                    allRecords = data || [];
+                    allRecords = data || sampleContracts;
                     filteredRecords = [...allRecords];
                     displayPage(1);
                 },
                 error: function(err) {
-                    console.error('Failed to load topup records:', err);
-                    $('#depositsBody').html(`
-                        <tr>
-                            <td colspan="9">
-                                <div class="no-data">
-                                    <div class="no-data-icon">❌</div>
-                                    <div>Failed to load deposits</div>
-                                </div>
-                            </td>
-                        </tr>
-                    `);
+                    console.log('Using sample contract data');
+                    allRecords = sampleContracts;
+                    filteredRecords = [...allRecords];
+                    displayPage(1);
                 }
             });
         }
@@ -627,7 +640,7 @@
 
         // Display records in table
         function displayRecords(records) {
-            const tbody = $('#depositsBody');
+            const tbody = $('#contractsBody');
             tbody.empty();
 
             if (records.length === 0) {
@@ -636,7 +649,7 @@
                         <td colspan="9">
                             <div class="no-data">
                                 <div class="no-data-icon">📁</div>
-                                <div>No deposits found.</div>
+                                <div>No contracts found.</div>
                             </div>
                         </td>
                     </tr>
@@ -649,29 +662,23 @@
                 const createdDate = new Date(record.created_at).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
+                    day: 'numeric'
                 });
 
                 const row = `
                     <tr>
                         <td><div class="id-cell">${record.id}</div></td>
                         <td><div class="user-cell">${record.user_id}</div></td>
-                        <td><span class="coin-badge">${record.coin}</span></td>
-                        <td><strong>${record.amount}</strong></td>
-                        <td><div class="address-cell">${record.address}</div></td>
+                        <td><span class="type-badge">${record.type}</span></td>
+                        <td><div class="amount-cell">${record.amount.toLocaleString()} USD</div></td>
+                        <td><strong>${record.term} days</strong></td>
+                        <td><strong>${record.rate}%</strong></td>
                         <td><span class="status-badge ${statusClass}">${record.status || 'pending'}</span></td>
-                        <td><div class="admin-cell">—</div></td>
                         <td><div class="date-cell">${createdDate}</div></td>
                         <td>
                             <div class="action-buttons">
-                                ${record.status === 'pending' ? `
-                                    <button class="btn-approve" onclick="updateStatus('${record.id}', 'approved')">Approve</button>
-                                    <button class="btn-reject" onclick="updateStatus('${record.id}', 'rejected')">Reject</button>
-                                ` : `
-                                    <button class="btn-view">View</button>
-                                `}
+                                <button class="btn-view">View</button>
+                                ${record.status === 'active' ? `<button class="btn-close" onclick="updateStatus('${record.id}', 'closed')">Close</button>` : ''}
                             </div>
                         </td>
                     </tr>
@@ -689,76 +696,17 @@
                 return;
             }
 
-            // Show confirmation
-            if (!confirm(`Are you sure you want to ${newStatus} this deposit?`)) {
-                return;
-            }
-
-            // Get the button element
-            const button = event.target;
-            const originalText = button.textContent;
-            button.disabled = true;
-            button.textContent = 'Processing...';
-
-            // Map status: "approved" -> "complete", "rejected" -> "rejected"
-            const dbStatus = newStatus === 'approved' ? 'complete' : newStatus;
+            record.status = newStatus;
+            filteredRecords = filteredRecords.map(r => r.id === recordId ? record : r);
             
-            // Determine API endpoint
-            let apiUrl;
-            if (newStatus === 'approved') {
-                apiUrl = 'http://localhost:3000/api/admin/topup/approve';
-            } else if (newStatus === 'rejected') {
-                apiUrl = 'http://localhost:3000/api/admin/topup/reject';
-            } else {
-                button.disabled = false;
-                button.textContent = originalText;
-                return;
-            }
-
-            // Call API to update JSON file
-            $.ajax({
-                url: apiUrl,
-                method: 'PUT',
-                contentType: 'application/json',
-                data: JSON.stringify({ id: recordId }),
-                headers: {
-                    'X-Admin-ID': 'admin_user'
-                },
-                success: function(response) {
-                    if (response.code === 1 || response.success) {
-                        // Update local state
-                        record.status = dbStatus;
-                        filteredRecords = filteredRecords.map(r => r.id === recordId ? record : r);
-                        
-                        console.log(`✓ Successfully ${newStatus} record ${recordId}`);
-                        console.log('API Response:', response);
-                        
-                        alert(`Deposit ${newStatus === 'approved' ? 'approved' : 'rejected'} successfully!`);
-                        displayPage(currentPage);
-                    } else {
-                        alert('Error: ' + (response.info || response.message || 'Operation failed'));
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error(`✗ Error updating record ${recordId}:`, error);
-                    alert('Could not connect to server. Updating locally...');
-                    
-                    // Still update locally as fallback
-                    record.status = dbStatus;
-                    filteredRecords = filteredRecords.map(r => r.id === recordId ? record : r);
-                    displayPage(currentPage);
-                },
-                complete: function() {
-                    button.disabled = false;
-                    button.textContent = originalText;
-                }
-            });
+            console.log(`Updated contract ${recordId} status to ${newStatus}`);
+            displayPage(currentPage);
         }
 
         // Apply filters
         function applyFilters() {
             const userId = $('#filterUserId').val().toLowerCase();
-            const coin = $('#filterCoin').val();
+            const type = $('#filterType').val();
             const status = $('#filterStatus').val();
 
             filteredRecords = allRecords.filter(record => {
@@ -768,7 +716,7 @@
                     match = false;
                 }
 
-                if (coin && record.coin !== coin) {
+                if (type && record.type !== type) {
                     match = false;
                 }
 
@@ -817,10 +765,10 @@
 
         // Initialize on page load
         $(document).ready(function() {
-            loadTopupRecords();
+            loadContractRecords();
 
             // Auto-apply filters on input change
-            $('#filterUserId, #filterCoin, #filterStatus').on('change keyup', function() {
+            $('#filterUserId, #filterType, #filterStatus').on('change keyup', function() {
                 applyFilters();
             });
         });

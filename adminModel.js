@@ -153,7 +153,7 @@ function addWithdrawalRecord(userId, coin, address, quantity) {
         coin: coin.toUpperCase(),
         address: address,
         quantity: parseFloat(quantity),
-        status: 'approved',
+        status: 'pending',
         created_at: new Date().toISOString(),
         timestamp: Date.now()
     };

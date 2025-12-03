@@ -127,7 +127,7 @@
         /* Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: 20px;
             margin-bottom: 40px;
         }
@@ -645,7 +645,7 @@
             }
 
             .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(3, 1fr);
                 gap: 16px;
                 margin-bottom: 32px;
             }
@@ -713,7 +713,7 @@
             }
 
             .stats-grid {
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(6, 1fr);
             }
         }
 
@@ -826,109 +826,23 @@
                     <div class="stat-card-value" id="arbitrageCount">3</div>
                     <div class="stat-card-subtitle">No new plans</div>
                 </div>
-            </div>
 
-            <!-- Admin Grid -->
-            <div class="admin-grid">
-                <!-- User Management Panel -->
-                <div class="panel" id="usersPanel" style="display:none;">
-                    <h2><span class="icon">👥</span> Users Management</h2>
-
-                    <div class="message" id="message" style="display:none;"></div>
-
-                    <div class="search-box">
-                        <input type="text" id="userSearch" placeholder="Search by user id...">
+                <div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                    <div class="stat-card-title">
+                        <span class="stat-card-icon">⛏️</span>
+                        <span>Mining</span>
                     </div>
+                    <div class="stat-card-value" id="miningCount">5</div>
+                    <div class="stat-card-subtitle">No new mining</div>
+                </div>
 
-                    <div class="user-list" id="userList">
-                        <!-- User items will be injected here -->
+                <div class="stat-card" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);">
+                    <div class="stat-card-title">
+                        <span class="stat-card-icon">💰</span>
+                        <span>Loan</span>
                     </div>
-
-                    <div id="noUserSelected" class="no-user">Select a user to view details</div>
-
-                    <div id="userDetails" style="display:none; margin-top:16px;">
-                        <div class="panel" style="padding:16px;">
-                            <div style="display:flex; gap:16px; align-items:center; margin-bottom:12px;">
-                                <div class="stat-box">
-                                    <strong>Top-ups</strong>
-                                    <div class="value" id="statTopups">0</div>
-                                </div>
-                                <div class="stat-box">
-                                    <strong>Withdrawals</strong>
-                                    <div class="value" id="statWithdrawals">0</div>
-                                </div>
-                            </div>
-
-                            <div id="balanceDisplay" class="balance-display"></div>
-
-                            <hr style="border-color:#30363d; margin:16px 0;">
-
-                            <form id="updateBalanceForm">
-                                <div class="form-group">
-                                    <label for="coinSelect">Coin</label>
-                                    <select id="coinSelect">
-                                        <option value="USDT">USDT</option>
-                                        <option value="BTC">BTC</option>
-                                        <option value="ETH">ETH</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="newAmount">Amount</label>
-                                    <input id="newAmount" type="number" step="0.01" />
-                                </div>
-                                <div class="button-group">
-                                    <button type="submit">Update Balance</button>
-                                    <button type="button" class="secondary" onclick="$('#updateBalanceForm')[0].reset();">Reset</button>
-                                </div>
-                            </form>
-
-                            <hr style="border-color:#30363d; margin:16px 0;">
-
-                            <form id="addTopupForm">
-                                <div class="form-group">
-                                    <label for="topupCoin">Top-up Coin</label>
-                                    <select id="topupCoin">
-                                        <option value="USDT">USDT</option>
-                                        <option value="BTC">BTC</option>
-                                        <option value="ETH">ETH</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="topupAmount">Amount</label>
-                                    <input id="topupAmount" type="number" step="0.01" />
-                                </div>
-                                <div class="button-group">
-                                    <button type="submit">Add Top-up</button>
-                                    <button type="button" class="secondary" onclick="$('#addTopupForm')[0].reset();">Reset</button>
-                                </div>
-                            </form>
-
-                            <hr style="border-color:#30363d; margin:16px 0;">
-
-                            <form id="addWithdrawalForm">
-                                <div class="form-group">
-                                    <label for="withdrawalCoin">Withdrawal Coin</label>
-                                    <select id="withdrawalCoin">
-                                        <option value="USDT">USDT</option>
-                                        <option value="BTC">BTC</option>
-                                        <option value="ETH">ETH</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="withdrawalAddress">To Address</label>
-                                    <input id="withdrawalAddress" type="text" />
-                                </div>
-                                <div class="form-group">
-                                    <label for="withdrawalQuantity">Quantity</label>
-                                    <input id="withdrawalQuantity" type="number" step="0.0001" />
-                                </div>
-                                <div class="button-group">
-                                    <button type="submit">Add Withdrawal</button>
-                                    <button type="button" class="secondary" onclick="$('#addWithdrawalForm')[0].reset();">Reset</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
+                    <div class="stat-card-value" id="loanCount">2</div>
+                    <div class="stat-card-subtitle">No new loans</div>
                 </div>
             </div>
         </div>
@@ -1134,10 +1048,12 @@
 
         // Make stat cards clickable and navigate to appropriate pages
         try {
-            $('.stats-grid .stat-card').eq(0).css('cursor','pointer').on('click', function() { window.location.href = 'topup.html'; }); // Deposits
+            $('.stats-grid .stat-card').eq(0).css('cursor','pointer').on('click', function() { window.location.href = 'deposit.html'; }); // Deposits
             $('.stats-grid .stat-card').eq(1).css('cursor','pointer').on('click', function() { window.location.href = 'withdrawal.html'; }); // Withdrawals
             $('.stats-grid .stat-card').eq(2).css('cursor','pointer').on('click', function() { window.location.href = 'contract.html'; }); // Trading
             $('.stats-grid .stat-card').eq(3).css('cursor','pointer').on('click', function() { window.location.href = 'ai-arbitrage.html'; }); // AI Arbitrage
+            $('.stats-grid .stat-card').eq(4).css('cursor','pointer').on('click', function() { window.location.href = 'mining.html'; }); // Mining
+            $('.stats-grid .stat-card').eq(5).css('cursor','pointer').on('click', function() { window.location.href = 'loan.html'; }); // Loan
         } catch (e) {
             console.warn('Unable to bind stat card click handlers', e);
         }

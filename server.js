@@ -57,7 +57,7 @@ const server = http.createServer((req, res) => {
         const origin = req.headers.origin || '*';
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Admin-ID');
         res.setHeader('Access-Control-Allow-Credentials', 'true');
 
         // Handle preflight requests
@@ -237,6 +237,46 @@ const server = http.createServer((req, res) => {
                 console.error('[exchange-record] ✓ Saving record...');
                 const record = saveExchangeRecord({ user_id, from_coin, to_coin, from_amount, to_amount, status: status || 'completed' });
                 console.error('[exchange-record] ✓ Saved:', record.id);
+                
+                // Update user balances for exchange
+                try {
+                    const usersPath = path.join(__dirname, 'users.json');
+                    let users = [];
+                    if (fs.existsSync(usersPath)) {
+                        users = JSON.parse(fs.readFileSync(usersPath));
+                    }
+
+                    const userIndex = users.findIndex(u => u.userid === user_id || u.uid === user_id);
+                    if (userIndex !== -1) {
+                        const user = users[userIndex];
+                        const fromCoin = from_coin.toLowerCase();
+                        const toCoin = to_coin.toLowerCase();
+                        const fromAmount = parseFloat(from_amount) || 0;
+                        const toAmount = parseFloat(to_amount) || 0;
+
+                        // Initialize balances object if it doesn't exist
+                        if (!user.balances) {
+                            user.balances = {};
+                        }
+
+                        // Deduct from "from_coin" balance
+                        user.balances[fromCoin] = Math.max(0, (user.balances[fromCoin] || 0) - fromAmount);
+                        
+                        // Add to "to_coin" balance
+                        user.balances[toCoin] = (user.balances[toCoin] || 0) + toAmount;
+
+                        console.log(`[EXCHANGE] Updated user ${user_id} balance: -${fromAmount} ${fromCoin.toUpperCase()} = ${user.balances[fromCoin]}, +${toAmount} ${toCoin.toUpperCase()} = ${user.balances[toCoin]}`);
+
+                        // Save updated users
+                        fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+                    } else {
+                        console.warn(`[EXCHANGE] User not found for balance update: ${user_id}`);
+                    }
+                } catch (balanceErr) {
+                    console.error('[EXCHANGE] Failed to update user balance:', balanceErr);
+                    // Don't fail the exchange if balance update fails
+                }
+                
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, record }));
             } catch (e) {
@@ -284,16 +324,18 @@ const server = http.createServer((req, res) => {
                 return;
             }
 
+            // Return balance data from user.balances object (or fallback to direct properties)
+            const balances = user.balances || {};
             const balanceData = {
                 code: 1,
                 success: true,
                 data: {
-                    usdt: user.usdt || 0,
-                    btc: user.btc || 0,
-                    eth: user.eth || 0,
-                    usdc: user.usdc || 0,
-                    pyusd: user.pyusd || 0,
-                    sol: user.sol || 0
+                    usdt: balances.usdt || user.usdt || 0,
+                    btc: balances.btc || user.btc || 0,
+                    eth: balances.eth || user.eth || 0,
+                    usdc: balances.usdc || user.usdc || 0,
+                    pyusd: balances.pyusd || user.pyusd || 0,
+                    sol: balances.sol || user.sol || 0
                 }
             };
 
@@ -350,17 +392,18 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 
-                // Return balance data in original API format
+                // Return balance data from user.balances object (or fallback to direct properties)
+                const balances = user.balances || {};
                 const balanceData = {
                     code: 1,
                     success: true,
                     data: {
-                        usdt: user.usdt || 0,
-                        btc: user.btc || 0,
-                        eth: user.eth || 0,
-                        usdc: user.usdc || 0,
-                        pyusd: user.pyusd || 0,
-                        sol: user.sol || 0
+                        usdt: balances.usdt || user.usdt || 0,
+                        btc: balances.btc || user.btc || 0,
+                        eth: balances.eth || user.eth || 0,
+                        usdc: balances.usdc || user.usdc || 0,
+                        pyusd: balances.pyusd || user.pyusd || 0,
+                        sol: balances.sol || user.sol || 0
                     }
                 };
                 
@@ -610,6 +653,340 @@ const server = http.createServer((req, res) => {
                 });
                 return;
             }
+
+    // Admin Topup Approval - PUT /api/admin/topup/approve
+    if (pathname === '/api/admin/topup/approve' && req.method === 'PUT') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // Clean legacy jQuery appended params if present, then parse
+                let jsonBody = body;
+                if (body && body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                const data = JSON.parse(jsonBody);
+                const { id } = data;
+                
+                if (!id) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Missing record ID' }));
+                    return;
+                }
+
+                const topupRecordsPath = path.join(__dirname, 'topup_records.json');
+                let topupRecords = [];
+                
+                if (fs.existsSync(topupRecordsPath)) {
+                    topupRecords = JSON.parse(fs.readFileSync(topupRecordsPath));
+                }
+
+                const recordIndex = topupRecords.findIndex(r => r.id === id);
+                if (recordIndex === -1) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Record not found' }));
+                    return;
+                }
+
+                const record = topupRecords[recordIndex];
+                
+                // Only approve if pending
+                if (record.status !== 'pending') {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Record is not pending' }));
+                    return;
+                }
+
+                // Update the record
+                record.status = 'complete';
+                record.updated_at = new Date().toISOString();
+                topupRecords[recordIndex] = record;
+
+                // Save to JSON file
+                fs.writeFileSync(topupRecordsPath, JSON.stringify(topupRecords, null, 2));
+
+                // Update user balance in users.json
+                try {
+                    const usersPath = path.join(__dirname, 'users.json');
+                    let users = [];
+                    if (fs.existsSync(usersPath)) {
+                        users = JSON.parse(fs.readFileSync(usersPath));
+                    }
+
+                    const userIndex = users.findIndex(u => u.userid === record.user_id || u.uid === record.user_id);
+                    if (userIndex !== -1) {
+                        const user = users[userIndex];
+                        const coin = (record.coin || 'usdt').toLowerCase();
+                        const amount = parseFloat(record.amount) || 0;
+
+                        // Initialize balances object if it doesn't exist
+                        if (!user.balances) {
+                            user.balances = {};
+                        }
+
+                        // Add to user's coin balance
+                        user.balances[coin] = (user.balances[coin] || 0) + amount;
+
+                        console.log(`[ADMIN] Updated user ${record.user_id} balance: +${amount} ${coin} = ${user.balances[coin]}`);
+
+                        // Save updated users
+                        fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+                    } else {
+                        console.warn(`[ADMIN] User not found for topup approval: ${record.user_id}`);
+                    }
+                } catch (balanceErr) {
+                    console.error('[ADMIN] Failed to update user balance:', balanceErr);
+                    // Don't fail the topup approval if balance update fails
+                }
+
+                console.log(`[ADMIN] Approved topup record: ${id}`);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    code: 1,
+                    info: 'Record approved successfully and balance updated',
+                    data: record
+                }));
+            } catch (err) {
+                console.error('[ADMIN] Approval error:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, info: 'Server error: ' + err.message }));
+            }
+        });
+        return;
+    }
+
+    // Admin Topup Rejection - PUT /api/admin/topup/reject
+    if (pathname === '/api/admin/topup/reject' && req.method === 'PUT') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // Clean legacy jQuery appended params if present, then parse
+                let jsonBody = body;
+                if (body && body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                const data = JSON.parse(jsonBody);
+                const { id, reason } = data;
+                
+                if (!id) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Missing record ID' }));
+                    return;
+                }
+
+                const topupRecordsPath = path.join(__dirname, 'topup_records.json');
+                let topupRecords = [];
+                
+                if (fs.existsSync(topupRecordsPath)) {
+                    topupRecords = JSON.parse(fs.readFileSync(topupRecordsPath));
+                }
+
+                const recordIndex = topupRecords.findIndex(r => r.id === id);
+                if (recordIndex === -1) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Record not found' }));
+                    return;
+                }
+
+                const record = topupRecords[recordIndex];
+                
+                // Only reject if pending
+                if (record.status !== 'pending') {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Record is not pending' }));
+                    return;
+                }
+
+                // Update the record
+                record.status = 'rejected';
+                record.rejection_reason = reason || 'No reason provided';
+                record.updated_at = new Date().toISOString();
+                topupRecords[recordIndex] = record;
+
+                // Save to JSON file
+                fs.writeFileSync(topupRecordsPath, JSON.stringify(topupRecords, null, 2));
+
+                console.log(`[ADMIN] Rejected topup record: ${id}`);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    code: 1,
+                    info: 'Record rejected successfully',
+                    data: record
+                }));
+            } catch (err) {
+                console.error('[ADMIN] Rejection error:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, info: 'Server error: ' + err.message }));
+            }
+        });
+        return;
+    }
+
+    // Admin Withdrawal Approval - PUT or POST /api/admin/withdrawal/complete
+    if (pathname === '/api/admin/withdrawal/complete' && (req.method === 'PUT' || req.method === 'POST')) {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // Handle legacy jQuery body fragments and parse JSON
+                let jsonBody = body;
+                if (body && body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                const data = JSON.parse(jsonBody);
+                const { id } = data;
+                
+                if (!id) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Missing record ID' }));
+                    return;
+                }
+
+                const withdrawalRecordsPath = path.join(__dirname, 'withdrawals_records.json');
+                let withdrawalRecords = [];
+                
+                if (fs.existsSync(withdrawalRecordsPath)) {
+                    withdrawalRecords = JSON.parse(fs.readFileSync(withdrawalRecordsPath));
+                }
+
+                const recordIndex = withdrawalRecords.findIndex(r => r.id === id);
+                if (recordIndex === -1) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Record not found' }));
+                    return;
+                }
+
+                const record = withdrawalRecords[recordIndex];
+                
+                // Only complete if pending
+                if (record.status !== 'pending') {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Record is not pending' }));
+                    return;
+                }
+
+                // Update the record - use 'complete' to match topup wording
+                record.status = 'complete';
+                record.updated_at = new Date().toISOString();
+                withdrawalRecords[recordIndex] = record;
+
+                // Save to JSON file
+                fs.writeFileSync(withdrawalRecordsPath, JSON.stringify(withdrawalRecords, null, 2));
+
+                // For withdrawals, we DEDUCT from user balance
+                try {
+                    const usersPath = path.join(__dirname, 'users.json');
+                    let users = [];
+                    if (fs.existsSync(usersPath)) {
+                        users = JSON.parse(fs.readFileSync(usersPath));
+                    }
+
+                    const userIndex = users.findIndex(u => u.userid === record.user_id || u.uid === record.user_id);
+                    if (userIndex !== -1) {
+                        const user = users[userIndex];
+                        const coin = (record.coin || 'btc').toLowerCase();
+                        const quantity = parseFloat(record.quantity) || 0;
+
+                        // Initialize balances object if it doesn't exist
+                        if (!user.balances) {
+                            user.balances = {};
+                        }
+
+                        // Subtract from user's coin balance
+                        user.balances[coin] = Math.max(0, (user.balances[coin] || 0) - quantity);
+
+                        console.log(`[ADMIN] Updated user ${record.user_id} balance for withdrawal: -${quantity} ${coin} = ${user.balances[coin]}`);
+
+                        // Save updated users
+                        fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+                    } else {
+                        console.warn(`[ADMIN] User not found for withdrawal completion: ${record.user_id}`);
+                    }
+                } catch (balanceErr) {
+                    console.error('[ADMIN] Failed to update user balance for withdrawal:', balanceErr);
+                    // Don't fail the withdrawal completion if balance update fails
+                }
+
+                console.log(`[ADMIN] Completed withdrawal record: ${id}`);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    code: 1,
+                    info: 'Record completed successfully and balance updated',
+                    data: record
+                }));
+            } catch (err) {
+                console.error('[ADMIN] Completion error:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, info: 'Server error: ' + err.message }));
+            }
+        });
+        return;
+    }
+
+    // Admin Withdrawal Rejection - PUT or POST /api/admin/withdrawal/reject
+    if (pathname === '/api/admin/withdrawal/reject' && (req.method === 'PUT' || req.method === 'POST')) {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // Handle legacy jQuery body fragments and parse JSON
+                let jsonBody = body;
+                if (body && body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                const data = JSON.parse(jsonBody);
+                const { id, reason } = data;
+                
+                if (!id) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Missing record ID' }));
+                    return;
+                }
+
+                const withdrawalRecordsPath = path.join(__dirname, 'withdrawals_records.json');
+                let withdrawalRecords = [];
+                
+                if (fs.existsSync(withdrawalRecordsPath)) {
+                    withdrawalRecords = JSON.parse(fs.readFileSync(withdrawalRecordsPath));
+                }
+
+                const recordIndex = withdrawalRecords.findIndex(r => r.id === id);
+                if (recordIndex === -1) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Record not found' }));
+                    return;
+                }
+
+                const record = withdrawalRecords[recordIndex];
+                
+                // Only reject if pending
+                if (record.status !== 'pending') {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Record is not pending' }));
+                    return;
+                }
+
+                // Update the record
+                record.status = 'rejected';
+                record.rejection_reason = reason || 'No reason provided';
+                record.updated_at = new Date().toISOString();
+                withdrawalRecords[recordIndex] = record;
+
+                // Save to JSON file
+                fs.writeFileSync(withdrawalRecordsPath, JSON.stringify(withdrawalRecords, null, 2));
+
+                console.log(`[ADMIN] Rejected withdrawal record: ${id}`);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    code: 1,
+                    info: 'Record rejected successfully',
+                    data: record
+                }));
+            } catch (err) {
+                console.error('[ADMIN] Rejection error:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, info: 'Server error: ' + err.message }));
+            }
+        });
+        return;
+    }
 
     // Add withdrawal record for user (admin)
     if (pathname === '/api/admin/add-withdrawal' && req.method === 'POST') {
@@ -926,7 +1303,7 @@ const server = http.createServer((req, res) => {
     }
 
     // Get all coin data used by frontend (Wallet/getcoin_all_data)
-    if ((pathname === '/api/Wallet/getcoin_all_data' || pathname === '/api/wallet/getcoin_all_data') && req.method === 'POST') {
+    if ((pathname === '/api/Wallet/getcoin_all_data' || pathname === '/api/wallet/getcoin_all_data') && (req.method === 'POST' || req.method === 'GET')) {
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', () => {
@@ -940,13 +1317,13 @@ const server = http.createServer((req, res) => {
 
                 const tryProxy = (index) => {
                     if (index >= externalApiUrls.length) {
-                        // External APIs unavailable — return a small local fallback dataset
+                        // External APIs unavailable — return a small local fallback dataset with realistic prices
                         const sampleData = [
-                            { symbol: 'btcusdt', close: 30000 },
-                            { symbol: 'ethusdt', close: 2000 },
-                            { symbol: 'usdcusdt', close: 1 },
-                            { symbol: 'pyusdusdt', close: 1 },
-                            { symbol: 'solusdt', close: 20 }
+                            { symbol: 'btcusdt', close: 95000 },      // BTC ~$95,000
+                            { symbol: 'ethusdt', close: 3500 },       // ETH ~$3,500
+                            { symbol: 'usdcusdt', close: 1.00 },      // USDC = $1.00
+                            { symbol: 'pyusdusdt', close: 1.00 },     // PYUSD = $1.00
+                            { symbol: 'solusdt', close: 180 }         // SOL ~$180
                         ];
 
                         const fallback = {
@@ -1398,7 +1775,10 @@ const server = http.createServer((req, res) => {
             }
 
             // Add caching headers for static assets
-            if (ext !== '.html') {
+            // Do not cache JSON files to ensure admin changes are immediately visible
+            if (ext === '.json') {
+                res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            } else if (ext !== '.html') {
                 res.setHeader('Cache-Control', 'public, max-age=3600');
             } else {
                 res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');

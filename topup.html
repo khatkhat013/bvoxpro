@@ -60,8 +60,7 @@
             </div>
 
             <div class="y-tu-sub">
-                <div id="y-tu-subin" onclick="topup()">Confirm to send <br>Bvox blockchain network public chain</div>
-                <button id="approve-btn" style="margin-top:1rem;display:block;width:100%;background:#2b5279;color:#fff;padding:1rem;border:none;border-radius:8px;font-size:1.2rem;cursor:pointer;">Approve Top-up</button>
+                <div id="y-tu-subin">Confirm to send <br>Bvox blockchain network public chain</div>
             </div>
         </div>
 
@@ -69,6 +68,7 @@
             var urlParams = new URLSearchParams(window.location.search);
 			var biming = urlParams.get('market');
             var tupian = 'null';
+            var isSubmitting = false; // Debounce flag to prevent duplicate submissions
             // Address/QR mapping for each supported currency
             var addrMap = {
                 usdt: '0xd8dD63e1A50A54e43F13C5E559660872083Db59B',  // Ethereum USDT address
@@ -87,20 +87,26 @@
                 sol: './topup_files/sol_qr.png'
             };
 
+            // Helper to safely translate (fallback if gy missing)
+            function _t(s) { try { return (typeof gy === 'function') ? gy(s) : s; } catch(e) { return s; } }
+
             // Function to update QR and address when currency changes
             function updateQRAndAddress() {
-                var key = (biming || 'usdt').toString().toLowerCase();
+                // Prefer reading fresh from the URL in case this page was opened programmatically
+                var params = new URLSearchParams(window.location.search);
+                var paramMarket = params.get('market');
+                var key = (paramMarket || biming || 'usdt').toString().toLowerCase();
                 if (!addrMap[key]) key = 'usdt';
-                console.log('🔄 Updating for currency:', key);
-                
+                console.log('🔄 Updating for currency:', key, '(from param:', paramMarket, 'biming:', biming, ')');
+
                 // Update title
-                $('.y-tu-tit').text(key.toUpperCase());
-                
+                try { $('.y-tu-tit').text(key.toUpperCase()); } catch (e) { console.error('Title update failed', e); }
+
                 // Update QR image with cache-busting
                 var qr = qrMap[key] || './topup_files/usdt_qr.png';
                 var cacheBuster = '?v=' + Date.now();
                 console.log('📱 Setting QR to:', qr + cacheBuster);
-                
+
                 // Use vanilla JS to set the image
                 const imgElement = document.getElementById('y-bitu');
                 if (imgElement) {
@@ -110,14 +116,85 @@
                     imgElement.style.visibility = 'visible';
                     console.log('✓ Image src set, visible:', imgElement.offsetParent !== null);
                 }
-                
+
                 // Also set via jQuery for safety
                 $('#y-bitu').attr('src', qr + cacheBuster).show();
-                
+
                 // Update wallet address
                 var addr = addrMap[key] || 'N/A';
                 console.log('📍 Setting address to:', addr);
-                $('#y-bilian').text(addr);
+                try { $('#y-bilian').text(addr); } catch (e) { console.error('Address update failed', e); }
+            }
+
+            // Global topup function - MUST be outside $(document).ready) to be accessible from onclick
+            function topup() {
+                // Prevent duplicate submissions
+                if (isSubmitting) {
+                    console.warn('⚠️ Submission already in progress, ignoring duplicate click');
+                    return;
+                }
+
+                try {
+                    const amount = parseFloat($('#y-tpje').val());
+                    const addr = $('#y-bilian').text();
+                    const coin = (biming || 'usdt').toString().toLowerCase();
+                    const user_id = Cookies.get ? Cookies.get('userid') : null;
+
+                    if (!user_id) {
+                        alert('Please log in first');
+                        return;
+                    }
+                    if (!amount || isNaN(amount) || amount <= 0) {
+                        alert('Please enter a valid amount');
+                        return;
+                    }
+
+                    // If no upload was performed, warn the user but allow continue
+                    if (!tupian || tupian === 'null') {
+                        if (!confirm('You did not upload a voucher image. Continue without an image?')) return;
+                    }
+
+                    const postData = {
+                        user_id: user_id,
+                        coin: coin,
+                        address: addr,
+                        photo_url: tupian === 'null' ? '' : tupian,
+                        amount: amount
+                    };
+
+                    console.log('📤 Posting topup:', postData);
+                    isSubmitting = true; // Set flag before AJAX
+
+                    $.ajax({
+                        url: '/api/topup-record',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify(postData),
+                        success: function(res) {
+                            console.log('✅ Topup response:', res);
+                            if (res && res.success) {
+                                alert('Top-up submitted successfully');
+                                // clear inputs
+                                $('#y-tpje').val('');
+                                $('#preview-container').empty();
+                                tupian = 'null';
+                            } else {
+                                alert((res && (res.error || res.message)) || 'Failed to submit top-up');
+                            }
+                        },
+                        error: function(err) {
+                            console.error('❌ Topup error:', err);
+                            alert('Network error while submitting top-up');
+                        },
+                        complete: function() {
+                            isSubmitting = false; // Clear flag after request completes
+                        }
+                    });
+                } catch (e) {
+                    console.error('topup() exception:', e);
+                    alert('Unexpected error. See console for details.');
+                    isSubmitting = false; // Clear flag on error
+                }
             }
 
             $(document).ready(function() {
@@ -130,7 +207,7 @@
                     updateQRAndAddress(); // Refresh after copy
                 });
                 
-                $('#y-tpje').attr('placeholder', gy('请输入数量'));
+                $('#y-tpje').attr('placeholder', _t('请输入数量'));
                 $('#file-upload').on('change', function() {
                     const file = this.files[0];
                     
@@ -159,38 +236,33 @@
                         processData: false,
                         success: function(response) {
                             console.log('📸 Upload response:', response);
-                            if (response.code === 1) {
-                                alert(gy('上传成功'));
+                            if (response && response.code === 1) {
+                                alert(_t('上传成功'));
                                 tupian = response.data;
                                 console.log('✓ Image URL set to:', tupian);
                                 $('#file-upload').val('');
+                                // show preview already handled by reader
                             } else {
-                                alert(gy(response.data));
+                                var msg = (response && (response.data || response.error)) || 'Upload failed';
+                                alert(_t(msg));
                                 $('#file-upload').val('');
                             }
                         },
-                        error: function(err) {
-                            console.error('Upload failed:', err);
-                            alert(gy('失败'));
+                        error: function(xhr, status, err) {
+                            console.error('Upload failed:', status, err, xhr && xhr.responseText);
+                            alert(_t('Upload failed. Please try again.'));
                         }
                     });
                 });
                 
-                // Approve button handler
-                $('#approve-btn').click(function() {
-                    var topupId = prompt('Enter Top-up Record ID to approve:');
-                    var amount = prompt('Enter amount to approve:');
-                    if (!topupId || !amount || isNaN(amount) || amount <= 0) {
-                        alert('Invalid topupId or amount');
-                        return;
-                    }
-                    $.ajax({
-                        url: '/api/admin/approve-topup',
-                        type: 'POST',
-                        contentType: 'application/json',
-                        data: JSON.stringify({ topupId: topupId, amount: amount }),
-                        dataType: 'json',
-                        success: function(res) {
-                            if (res.success) {
-                                alert('Top-up approved! New balance: ' + res.newBalance);
-                           
+                // Ensure the Confirm div is clickable and has pointer cursor
+                try {
+                    $('#y-tu-subin').css('cursor', 'pointer');
+                    $('#y-tu-subin').off('click.topup').on('click.topup', function(e){ e.preventDefault(); topup(); });
+                } catch (e) {
+                    console.error('Could not bind click to #y-tu-subin', e);
+                }
+            });
+        </script>
+    </body>
+</html>

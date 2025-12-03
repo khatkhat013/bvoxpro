@@ -14,6 +14,28 @@ const WITHDRAWAL_DB = path.join(__dirname, 'withdrawals_records.json');
 function initWithdrawalDB() {
     if (!fs.existsSync(WITHDRAWAL_DB)) {
         fs.writeFileSync(WITHDRAWAL_DB, JSON.stringify([], null, 2));
+        return;
+    }
+
+    // Normalize status values so the DB uses a single canonical value 'complete'
+    try {
+        const raw = fs.readFileSync(WITHDRAWAL_DB, 'utf8');
+        if (!raw) return;
+        const records = JSON.parse(raw);
+        let changed = false;
+        records.forEach(r => {
+            if (!r || typeof r !== 'object') return;
+            const s = (r.status || '').toString().toLowerCase();
+            if (s === 'completed' || s === 'approved') {
+                r.status = 'complete';
+                changed = true;
+            }
+        });
+        if (changed) {
+            fs.writeFileSync(WITHDRAWAL_DB, JSON.stringify(records, null, 2));
+        }
+    } catch (e) {
+        // If file malformed, leave it and let other code handle errors
     }
 }
 

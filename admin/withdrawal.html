@@ -37,7 +37,7 @@
     .pagination{display:flex;justify-content:center;gap:8px;margin-top:30px;align-items:center}
     .pagination button,.pagination span{padding:8px 14px;border:1px solid #404a5e;background:#252d3d;color:#e6edf3;border-radius:6px;cursor:pointer}
     .pagination .active{background:#667eea;color:#fff}
-    @media(max-width:768px){.filters{grid-template-columns:1fr}table{font-size:12px}th,td{padding:12px 10px}}
+    @media(max-width:480px){.container{padding:12px 8px}.header{padding:16px 15px;border-radius:8px 8px 0 0}.header h1{font-size:18px}.header .icon{font-size:24px}.filters{padding:15px;grid-template-columns:1fr;gap:12px;border-top:1px solid #404a5e}.filter-group label{font-size:10px}.filter-group input,.filter-group select{padding:10px 8px;font-size:14px}.filter-btn{width:100%;padding:10px 16px}.table-wrapper{border:none;border-radius:8px;background:transparent;border-top:1px solid #404a5e}table{display:block;background:transparent;border-collapse:separate;border-spacing:0 12px}thead{display:none}tbody{display:flex;flex-direction:column;gap:12px;padding:12px 0}tr{display:block;background:#252d3d;border:1px solid #404a5e;border-radius:8px;padding:15px;margin-bottom:0}tr:hover{background:#2a3245}td{display:grid;grid-template-columns:85px 1fr;align-items:center;padding:8px 0;border:none;border-bottom:1px solid #404a5e;font-size:13px;gap:10px}td:last-child{border-bottom:0;grid-template-columns:1fr}td::before{content:attr(data-label);font-weight:600;color:#8b949e;text-transform:uppercase;font-size:10px}.action-buttons{flex-wrap:wrap;gap:6px;grid-column:1 / -1}.btn-approve,.btn-reject,.btn-view{padding:8px 12px;font-size:12px;flex:1;min-width:70px}.pagination{flex-wrap:wrap;gap:6px;margin-top:20px}.pagination button,.pagination span{padding:6px 10px;font-size:11px}.no-data{padding:40px 15px}.no-data-icon{font-size:36px;margin-bottom:12px}}@media(min-width:481px) and (max-width:768px){.container{padding:20px 15px}.header{padding:18px 25px}.header h1{font-size:20px}.header .icon{font-size:26px}.filters{padding:18px 25px;grid-template-columns:repeat(2,1fr);gap:12px}.filter-group:nth-child(4){grid-column:1 / -1}.filter-btn{width:100%}table{font-size:13px}th,td{padding:12px 15px}}@media(min-width:769px){.container{padding:40px 20px}}
   </style>
 </head>
 <body>
@@ -47,7 +47,7 @@
     <div class="filters">
       <div class="filter-group"><label>Search ID</label><input id="filterUserId" placeholder="User ID..." /></div>
       <div class="filter-group"><label>Coin</label><select id="filterCoin"><option value="">All Coins</option><option>USDT</option><option>BTC</option><option>ETH</option><option>USDC</option></select></div>
-      <div class="filter-group"><label>Status</label><select id="filterStatus"><option value="">All Status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="completed">Completed</option><option value="rejected">Rejected</option></select></div>
+      <div class="filter-group"><label>Status</label><select id="filterStatus"><option value="">All Status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="complete">Approved</option><option value="rejected">Rejected</option></select></div>
       <div class="filter-group"><label>&nbsp;</label><button class="filter-btn" onclick="applyFilters()">Filter</button></div>
     </div>
 
@@ -101,7 +101,12 @@
       if(!records||records.length===0){tbody.html('<tr><td colspan="9"><div class="no-data">No withdrawals found.</div></td></tr>');return}
 
       records.forEach(record=>{
-        const statusClass='status-'+(record.status||'pending');
+          // Normalize status class: map several possible status strings to UI classes
+          let statusClass = 'status-pending';
+          const s = (record.status || 'pending').toLowerCase();
+          if (s === 'pending') statusClass = 'status-pending';
+          else if (s === 'rejected') statusClass = 'status-rejected';
+          else if (s === 'complete' || s === 'completed' || s === 'approved') statusClass = 'status-approved';
         const createdDate=new Date(record.created_at).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 
         const row=`
@@ -116,7 +121,7 @@
             <td><div class="date-cell">${createdDate}</div></td>
             <td>
               <div class="action-buttons">
-                ${record.status==='pending'?`<button class="btn-approve" onclick="updateStatus('${record.id}','completed')">Complete</button><button class="btn-reject" onclick="updateStatus('${record.id}','rejected')">Reject</button>`:`<button class="btn-view">View</button>`}
+                ${record.status==='pending'?`<button class="btn-approve" onclick="updateStatus('${record.id}','complete')">Approve</button><button class="btn-reject" onclick="updateStatus('${record.id}','rejected')">Reject</button>`:`<button class="btn-view">View</button>`}
               </div>
             </td>
           </tr>
@@ -129,10 +134,76 @@
     function updateStatus(recordId,newStatus){
       const record=allRecords.find(r=>r.id===recordId);
       if(!record){alert('Record not found');return}
-      record.status=newStatus;
-      filteredRecords=filteredRecords.map(r=>r.id===recordId?record:r);
-      console.log(`Updated record ${recordId} status to ${newStatus}`);
-      displayPage(currentPage);
+      
+      // Map status values to user-friendly action words
+      const actionMap = {
+        'completed': 'Approve',
+        'complete': 'Approve',
+        'rejected': 'Reject'
+      };
+      const pastMap = {
+        'Approve': 'Approved',
+        'Reject': 'Rejected'
+      };
+      const actionText = actionMap[newStatus] || newStatus;
+
+      // Show confirmation using user-friendly action
+      if(!confirm(`Are you sure you want to ${actionText} this withdrawal?`)){return}
+      
+      // Get the button element
+      const button=event.target;
+      const originalText=button.textContent;
+      button.disabled=true;
+      button.textContent='Processing...';
+      
+      // Determine API endpoint
+      let apiUrl;
+      if(newStatus==='completed' || newStatus==='complete'){
+        apiUrl='http://localhost:3000/api/admin/withdrawal/complete';
+      }else if(newStatus==='rejected'){
+        apiUrl='http://localhost:3000/api/admin/withdrawal/reject';
+      }else{
+        button.disabled=false;
+        button.textContent=originalText;
+        return;
+      }
+      
+      // Call API to update JSON file
+      $.ajax({
+        url:apiUrl,
+        method:'PUT',
+        contentType:'application/json',
+        data:JSON.stringify({id:recordId}),
+        headers:{'X-Admin-ID':'admin_user'},
+        success:function(response){
+          if(response.code===1||response.success){
+            // Update local state
+            record.status=newStatus;
+            filteredRecords=filteredRecords.map(r=>r.id===recordId?record:r);
+            console.log(`✓ Successfully ${actionText} record ${recordId}`);
+            console.log('API Response:',response);
+            const past = pastMap[actionText] || (actionText + 'ed');
+            alert(`Withdrawal ${past} successfully!`);
+            displayPage(currentPage);
+          }else{
+            alert('Error: '+(response.info||response.message||'Operation failed'));
+          }
+        },
+        error:function(xhr,status,error){
+          console.error(`✗ Error updating record ${recordId}:`,error);
+          alert('Could not connect to server. Updating locally...');
+          record.status=newStatus;
+          filteredRecords=filteredRecords.map(r=>r.id===recordId?record:r);
+          const pastLocal = pastMap[actionText] || (actionText + 'ed');
+          // Show local update message using past tense
+          console.log(`(local) Withdrawal ${pastLocal} for ${recordId}`);
+          displayPage(currentPage);
+        },
+        complete:function(){
+          button.disabled=false;
+          button.textContent=originalText;
+        }
+      });
     }
 
     function applyFilters(){

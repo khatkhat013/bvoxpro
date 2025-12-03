@@ -216,26 +216,74 @@
 
             function getyue(biming){
                 var userid = Cookies.get('userid');
+                console.log('🔄 Fetching balance for user:', userid, 'coin:', biming);
                 
-                // Mock balances for testing - user can exchange as long as amount is valid
-                const mockBalances = {
-                    usdt: 10000,
-                    eth: 50,
-                    btc: 2,
-                    usdc: 10000,
-                    pyusd: 5000,
-                    sol: 1000
-                };
-                
-                // Set mock balances
-                $('#y-yue').text(mockBalances[biming.toLowerCase()].toFixed(xsw[biming.toLowerCase()]));
-                dqyue = mockBalances;
-                $('#y-s-usdt .y-ex-xz-r').text(mockBalances.usdt.toFixed(xsw['usdt']));
-                $('#y-s-eth .y-ex-xz-r').text(mockBalances.eth.toFixed(xsw['eth']));
-                $('#y-s-btc .y-ex-xz-r').text(mockBalances.btc.toFixed(xsw['btc']));
-                $('#y-s-usdc .y-ex-xz-r').text(mockBalances.usdc.toFixed(xsw['usdc']));
-                $('#y-s-pyusd .y-ex-xz-r').text(mockBalances.pyusd.toFixed(xsw['pyusd']));
-                $('#y-s-sol .y-ex-xz-r').text(mockBalances.sol.toFixed(xsw['sol']));
+                // Fetch balances from database
+                $.ajax({
+                    url: '/api/Wallet/getbalance',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        user_id: userid
+                    }),
+                    timeout: 5000,
+                    success: function(res) {
+                        console.log('📊 Raw response:', res);
+                        
+                        // Extract balances from response data object
+                        let balances = res.data || res.balances || {};
+                        console.log('💰 Extracted balances:', balances);
+                        
+                        // Use fallback balances if no data
+                        const defaultBalances = {
+                            usdt: 10000,
+                            eth: 50,
+                            btc: 2,
+                            usdc: 10000,
+                            pyusd: 5000,
+                            sol: 1000
+                        };
+                        
+                        // Merge with defaults (database values take priority)
+                        dqyue = Object.assign({}, defaultBalances, balances);
+                        console.log('✅ Final balances:', dqyue);
+                        
+                        // Set current coin balance display
+                        const currentBalance = dqyue[biming.toLowerCase()] || 0;
+                        $('#y-yue').text(Number(currentBalance).toFixed(xsw[biming.toLowerCase()]));
+                        console.log('📝 Set balance display to:', Number(currentBalance).toFixed(xsw[biming.toLowerCase()]));
+                        
+                        // Update all coin balances in dropdown
+                        $('#y-s-usdt .y-ex-xz-r').text(Number(dqyue.usdt || 0).toFixed(xsw['usdt']));
+                        $('#y-s-eth .y-ex-xz-r').text(Number(dqyue.eth || 0).toFixed(xsw['eth']));
+                        $('#y-s-btc .y-ex-xz-r').text(Number(dqyue.btc || 0).toFixed(xsw['btc']));
+                        $('#y-s-usdc .y-ex-xz-r').text(Number(dqyue.usdc || 0).toFixed(xsw['usdc']));
+                        $('#y-s-pyusd .y-ex-xz-r').text(Number(dqyue.pyusd || 0).toFixed(xsw['pyusd']));
+                        $('#y-s-sol .y-ex-xz-r').text(Number(dqyue.sol || 0).toFixed(xsw['sol']));
+                    },
+                    error: function(err) {
+                        console.warn('⚠️ Failed to fetch balances from database, using defaults:', err);
+                        
+                        // Use default balances on error
+                        const defaultBalances = {
+                            usdt: 10000,
+                            eth: 50,
+                            btc: 2,
+                            usdc: 10000,
+                            pyusd: 5000,
+                            sol: 1000
+                        };
+                        
+                        dqyue = defaultBalances;
+                        $('#y-yue').text(defaultBalances[biming.toLowerCase()].toFixed(xsw[biming.toLowerCase()]));
+                        $('#y-s-usdt .y-ex-xz-r').text(defaultBalances.usdt.toFixed(xsw['usdt']));
+                        $('#y-s-eth .y-ex-xz-r').text(defaultBalances.eth.toFixed(xsw['eth']));
+                        $('#y-s-btc .y-ex-xz-r').text(defaultBalances.btc.toFixed(xsw['btc']));
+                        $('#y-s-usdc .y-ex-xz-r').text(defaultBalances.usdc.toFixed(xsw['usdc']));
+                        $('#y-s-pyusd .y-ex-xz-r').text(defaultBalances.pyusd.toFixed(xsw['pyusd']));
+                        $('#y-s-sol .y-ex-xz-r').text(defaultBalances.sol.toFixed(xsw['sol']));
+                    }
+                });
             }
 
             function getxianjia(biming){

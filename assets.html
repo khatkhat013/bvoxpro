@@ -304,20 +304,17 @@
 
         function updateje(){
             var userid = Cookies.get('userid');
+            console.log('🔄 Starting updateje() for user:', userid);
+            
             $.ajax({
                 url: 'http://localhost:3000/api/Wallet/getbalance',
                 type: 'POST',
                 dataType: 'json',
                 data: { 'userid': userid },
                 success: function(res){
-                    var zc_usdt;
-                    var zc_btc;
-                    var zc_eth;
-                    var zc_usdc;
-                    var zc_pyusd;
-                    var zc_sol;
+                    console.log('✅ Balance response:', res);
+                    
                     if(res.code == 1 || res.success == true){
-                        // Handle response from localhost server
                         var balanceData = res.data || res;
                         
                         $('#y-wa-usdt1').text(Number(balanceData.usdt || 0).toFixed(xsw['usdt']));
@@ -328,32 +325,70 @@
                         $('#y-wa-sol1').text(Number(balanceData.sol || 0).toFixed(xsw['sol']));
 
                         $('#y-wa-usdt2').text(Number(balanceData.usdt || 0).toFixed(xsw['usdt']));
-                        zc_usdt = Number(balanceData.usdt || 0).toFixed(xsw['usdt']);
-
-                        $.post(apiurl + "/Wallet/getcoin_all_data",{},function(res){
-                            if(res.code == 1){
-                                const data = res.data.data;
-
-                                btcusdt = findSymbol(data, "btcusdt");
-                                ethusdt = findSymbol(data, "ethusdt");
-                                usdc = findSymbol(data, "usdcusdt");
-                                pyusd = findSymbol(data, "pyusdusdt");
-                                sol = findSymbol(data, "solusdt");
-
-                                zc_btc = ($('#y-wa-btc1').text() * btcusdt.close).toFixed(2);
-                                zc_eth = ($('#y-wa-eth1').text() * ethusdt.close).toFixed(2);
-                                zc_usdc = ($('#y-wa-usdc1').text() * usdc.close).toFixed(2);
-                                zc_pyusd = ($('#y-wa-pyusd1').text() * pyusd.close).toFixed(2);
-                                zc_sol = ($('#y-wa-sol1').text() * sol.close).toFixed(2);
-                                $('#y-wa-eth2').text(zc_eth);
-                                $('#y-wa-btc2').text(zc_btc);
-                                $('#y-wa-usdc2').text(zc_usdc);
-                                $('#y-wa-pyusd2').text(zc_pyusd);
-                                $('#y-wa-sol2').text(zc_sol);
-
-                                $('#y-zzczh').text(
-                                    '≈ ' + (Number(zc_usdt) + Number(zc_eth) + Number(zc_btc) + Number(zc_usdc) + Number(zc_pyusd) + Number(zc_sol)).toFixed(2)
-                                );
+                        
+                        console.log('📊 Balances updated, now fetching prices...');
+                        
+                        // Fetch crypto prices from local endpoint with timeout
+                        $.ajax({
+                            url: 'http://localhost:3000/api/Wallet/getcoin_all_data',
+                            type: 'POST',
+                            dataType: 'json',
+                            data: {},
+                            timeout: 10000,
+                            success: function(priceRes){
+                                console.log('💰 Price data received:', priceRes);
+                                
+                                if(priceRes.code == 1 && priceRes.data && priceRes.data.data && priceRes.data.data.length > 0){
+                                    const priceData = priceRes.data.data;
+                                    console.log('📈 Price array:', priceData);
+                                    
+                                    // Find prices or use defaults
+                                    const btcPrice = (findSymbol(priceData, "btcusdt") || { close: 95000 }).close;
+                                    const ethPrice = (findSymbol(priceData, "ethusdt") || { close: 3500 }).close;
+                                    const usdcPrice = (findSymbol(priceData, "usdcusdt") || { close: 1 }).close;
+                                    const pyusdPrice = (findSymbol(priceData, "pyusdusdt") || { close: 1 }).close;
+                                    const solPrice = (findSymbol(priceData, "solusdt") || { close: 180 }).close;
+                                    
+                                    console.log('💵 Prices - BTC:', btcPrice, 'ETH:', ethPrice, 'USDC:', usdcPrice, 'PYUSD:', pyusdPrice, 'SOL:', solPrice);
+                                    
+                                    // Get current balance amounts from display
+                                    const btcAmount = parseFloat($('#y-wa-btc1').text()) || 0;
+                                    const ethAmount = parseFloat($('#y-wa-eth1').text()) || 0;
+                                    const usdcAmount = parseFloat($('#y-wa-usdc1').text()) || 0;
+                                    const pyusdAmount = parseFloat($('#y-wa-pyusd1').text()) || 0;
+                                    const solAmount = parseFloat($('#y-wa-sol1').text()) || 0;
+                                    const usdtAmount = parseFloat($('#y-wa-usdt1').text()) || 0;
+                                    
+                                    console.log('📦 Amounts - BTC:', btcAmount, 'ETH:', ethAmount, 'USDC:', usdcAmount, 'PYUSD:', pyusdAmount, 'SOL:', solAmount);
+                                    
+                                    // Calculate USD values
+                                    const btcUsd = (btcAmount * btcPrice).toFixed(2);
+                                    const ethUsd = (ethAmount * ethPrice).toFixed(2);
+                                    const usdcUsd = (usdcAmount * usdcPrice).toFixed(2);
+                                    const pyusdUsd = (pyusdAmount * pyusdPrice).toFixed(2);
+                                    const solUsd = (solAmount * solPrice).toFixed(2);
+                                    
+                                    console.log('💲 USD values - BTC:', btcUsd, 'ETH:', ethUsd, 'USDC:', usdcUsd, 'PYUSD:', pyusdUsd, 'SOL:', solUsd);
+                                    
+                                    // Update the USD display (just the number, $ is already in HTML)
+                                    $('#y-wa-btc2').text(btcUsd);
+                                    $('#y-wa-eth2').text(ethUsd);
+                                    $('#y-wa-usdc2').text(usdcUsd);
+                                    $('#y-wa-pyusd2').text(pyusdUsd);
+                                    $('#y-wa-sol2').text(solUsd);
+                                    
+                                    // Calculate total
+                                    const totalUsd = (parseFloat(usdtAmount) + parseFloat(btcUsd) + parseFloat(ethUsd) + parseFloat(usdcUsd) + parseFloat(pyusdUsd) + parseFloat(solUsd)).toFixed(2);
+                                    $('#y-zzczh').text('≈ $ ' + totalUsd);
+                                    console.log('✨ Total assets: $ ' + totalUsd);
+                                } else {
+                                    console.warn('⚠️ Invalid price format, using fallbacks');
+                                    applyFallbackPrices();
+                                }
+                            },
+                            error: function(err){
+                                console.error('❌ Error fetching prices:', err);
+                                applyFallbackPrices();
                             }
                         });
                     } else {
@@ -361,23 +396,46 @@
                     }
                 },
                 error: function(err){
-                    console.error('Error fetching balance from localhost:', err);
-                    // Fallback to external API if localhost fails
-                    $.post(apiurl + "/Wallet/getbalance",{
-                        'userid':userid,
-                    },function(res){
-                        if(res.code == 1){
-                            $('#y-wa-usdt1').text(Number(res.data.usdt).toFixed(xsw['usdt']));
-                            $('#y-wa-eth1').text(Number(res.data.eth).toFixed(xsw['eth']));
-                            $('#y-wa-btc1').text(Number(res.data.btc).toFixed(xsw['btc']));
-                            $('#y-wa-usdc1').text(Number(res.data.usdc).toFixed(xsw['usdc']));
-                            $('#y-wa-pyusd1').text(Number(res.data.pyusd).toFixed(xsw['pyusd']));
-                            $('#y-wa-sol1').text(Number(res.data.sol).toFixed(xsw['sol']));
-                            $('#y-wa-usdt2').text(Number(res.data.usdt).toFixed(xsw['usdt']));
-                        }
-                    });
+                    console.error('Error fetching balance:', err);
                 }
             });
+        }
+
+        // Apply fallback prices with proper formatting
+        function applyFallbackPrices() {
+            console.log('⚙️ Applying fallback prices...');
+            
+            const prices = {
+                btc: 95000,
+                eth: 3500,
+                usdc: 1.00,
+                pyusd: 1.00,
+                sol: 180
+            };
+
+            const btcAmount = parseFloat($('#y-wa-btc1').text()) || 0;
+            const ethAmount = parseFloat($('#y-wa-eth1').text()) || 0;
+            const usdcAmount = parseFloat($('#y-wa-usdc1').text()) || 0;
+            const pyusdAmount = parseFloat($('#y-wa-pyusd1').text()) || 0;
+            const solAmount = parseFloat($('#y-wa-sol1').text()) || 0;
+            const usdtAmount = parseFloat($('#y-wa-usdt1').text()) || 0;
+
+            const btcUsd = (btcAmount * prices.btc).toFixed(2);
+            const ethUsd = (ethAmount * prices.eth).toFixed(2);
+            const usdcUsd = (usdcAmount * prices.usdc).toFixed(2);
+            const pyusdUsd = (pyusdAmount * prices.pyusd).toFixed(2);
+            const solUsd = (solAmount * prices.sol).toFixed(2);
+
+            $('#y-wa-btc2').text(btcUsd);
+            $('#y-wa-eth2').text(ethUsd);
+            $('#y-wa-usdc2').text(usdcUsd);
+            $('#y-wa-pyusd2').text(pyusdUsd);
+            $('#y-wa-sol2').text(solUsd);
+
+            const totalUsd = (parseFloat(usdtAmount) + parseFloat(btcUsd) + parseFloat(ethUsd) + parseFloat(usdcUsd) + parseFloat(pyusdUsd) + parseFloat(solUsd)).toFixed(2);
+            $('#y-zzczh').text('≈ $ ' + totalUsd);
+            
+            console.log('✅ Fallback prices applied - Total: $ ' + totalUsd);
         }
 
         function topupzk(){
