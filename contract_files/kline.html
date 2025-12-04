@@ -6,15 +6,40 @@
 	<title>kline</title>
 
 	<style>
+		html, body {
+			height: 100%;
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+			background: transparent;
+		}
 		#chart_container {
 			margin: 0 auto;
 			width: 100%;
-			height: 500px;
+			height: 100%; /* adapt to iframe container height */
+			min-height: 380px; /* slightly smaller minimum to avoid extra bottom gap */
+			display: flex;
+			flex-direction: column;
 		}
         .changInterval {
             margin-bottom: 10px;
             padding-left: 5px;
-        }
+		}
+		#chart_container1 {
+			position: relative;
+			height: 100%;
+			width: 100%;
+			display: block;
+		}
+		#vy-chart {
+			position: absolute;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			height: calc(100% - 30px - 8px); /* top toolbar 30px; subtract a few px to close any gap */
+			box-sizing: border-box;
+			overflow: hidden;
+		}
         .interval-item{
             font-size:14px;
             padding: 2px;
@@ -23,7 +48,7 @@
         .active{
             border-bottom:3px solid #FCD535;
         }
-        .loding{
+		.loding{
             position: absolute;
             width: 100%;
             height: 100%;
@@ -106,6 +131,7 @@
 	    loading()
 		window.init_offset = 10
 
+		try{
 		VyKline.bootstrap({
 			container: document.getElementById('chart_container1'), // 容器
 			deedfeeds: window.deedfeeds, // 数据反馈对象
@@ -120,10 +146,31 @@
 				default_fall_color: '#CC1414',
 			},
 			onTimeIntervalChanged: interval => {
+			vyChart.switchChartType('KLINE')
+			// Force a resize after initialization to ensure canvases match container height
+			setTimeout(function(){
+				try{ if (vyChart && typeof vyChart.resize === 'function') vyChart.resize(); }catch(e){}
+			}, 200);
 
+			// After resize, adjust any canvases that have an inline bottom offset so the volume pane reaches the container bottom
+			setTimeout(function(){
+				try{
+					const cvs = document.querySelectorAll('#vy-chart canvas');
+					cvs.forEach(c => {
+						const cs = window.getComputedStyle(c);
+						const bottom = parseFloat(cs.bottom) || 0;
+						if (bottom > 2) {
+							c.style.bottom = '0px';
+						}
+					});
+				} catch(e){}
+			}, 400);
 				console.log("window.deedfeeds", interval);
 			}
 		})
+		}catch(e){
+			console.error('VyKline.bootstrap error:', e);
+		}
 
 
 		vyChart.switchChartType('KLINE')

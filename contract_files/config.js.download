@@ -284,6 +284,7 @@ window.addEventListener('load', async () => {
 var translations = {};  // 全局变量，存储翻译数据
 var translationsLoaded = false;  // 标志位，表示翻译是否已加载
 var loadingInProgress = false;  // 标志位，表示语言文件是否正在加载
+var missingTranslationKeys = {};
 
 // 加载翻译文件的函数
 function loadTranslationsSync() {
@@ -339,9 +340,12 @@ function gy(ykey) {
         return translations[ykey];
     }
     
-    // Log a warning if translation is missing but don't break
+    // Only warn once per missing key to avoid spamming console
     if (typeof ykey === 'string' && ykey.length > 0) {
-        console.warn('Translation missing for key: ' + ykey);
+        if (!missingTranslationKeys[ykey]) {
+            try { console.warn('Translation missing for key: ' + ykey); } catch (e) {}
+            missingTranslationKeys[ykey] = 1;
+        }
     }
     
     return ykey;  // 返回翻译或原始 key

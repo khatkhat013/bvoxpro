@@ -45,6 +45,10 @@ function initOnReady1(kLineDataList){
     // 加载数据
     kLineDataList.reverse()
 
+    // Filter out any invalid points without proper numeric 'close' value
+    kLineDataList = (kLineDataList || []).filter(function(item){
+      return item && item.close !== undefined && item.close !== null && !isNaN(Number(item.close));
+    });
     var chartDataList = kLineDataList.map(function (data) {
         return {
             timestamp: data.time,
@@ -223,38 +227,56 @@ class Deedfeeds {
         const historyData = []
 
         data.data && data.data.forEach(item => {
-          historyData.unshift({
-            time: item.id * 1000, // 时间
-            open: item.open, // 开
-            high: item.high, // 高
-            low: item.low, // 低
-            close: item.close, // 收
-            volume: item.vol // 交易量
+            try{
+                const parsedClose = Number(item.close);
+                if (item && item.id && !isNaN(parsedClose)) {
+                    historyData.unshift({
+                      timestamp: item.id * 1000, // timestamp in ms
+                      open: Number(item.open), // open
+                      high: Number(item.high), // high
+                      low: Number(item.low), // low
+                      close: parsedClose, // close
+                      volume: Number(item.vol) // volume
+                    })
+                } // else ignore malformed data points
+            }catch(e){}
           })
-        })
+        const totalPoints = data.data ? data.data.length : 0;
         console.log(historyData)
+        if(totalPoints !== historyData.length){
+          console.warn(`[deedfeeds] dropped malformed points: ${totalPoints - historyData.length} of ${totalPoints}`)
+        }
         loading(1)
         if(chart_type==0){
             chart.setPriceVolumePrecision(2,2)
             initOnReady1(historyData)
             
-        }else{
+        } else {
             let historyData1=[]
             data.data && data.data.forEach(item => {
-              historyData1.unshift({
-                timestamp: item.id * 1000, // 时间
-                open: item.open, // 开
-                high: item.high, // 高
-                low: item.low, // 低
-                close: item.close, // 收
-                volume: item.vol // 交易量
-              })
+              try{
+                const parsedClose = Number(item.close)
+                if(item && item.id && !isNaN(parsedClose)){
+                  historyData1.unshift({
+                    timestamp: item.id * 1000, // 时间
+                    open: Number(item.open), // 开
+                    high: Number(item.high), // 高
+                    low: Number(item.low), // 低
+                    close: parsedClose, // 收
+                    volume: Number(item.vol) // 交易量
+                  })
+                }
+              }catch(e){}
             })
             historyData1.reverse()
             chart.applyNewData(historyData1)
         }
         
-        this.subscribeDataParam.setHistoryData(historyData)
+        if(historyData && historyData.length){
+          this.subscribeDataParam.setHistoryData(historyData)
+        } else {
+          console.warn('No historyData to set for', SYMBOL)
+        }
       } else if (data.unsubbed) { // 取消订阅成功
         this.ws.send(JSON.stringify(historyK(this.subscribeDataParam.interval)));
         this.ws.send(JSON.stringify(subK(this.subscribeDataParam.interval)));
@@ -277,19 +299,23 @@ class Deedfeeds {
           volume: perData.vol,
           // 时间戳，毫秒级别，必要字段
         //   timestamp: perData.id * 1000
-        timestamp:perData.id * 1000, 
+        timestamp: perData.id ? perData.id * 1000 : Date.now(), 
         }
         // console.info(perData1)
-        chart.updateData(perData1);
-        localStorage.setItem('closeshijian'+SYMBOL,perData.close)
-        this.subscribeDataParam.subscribeData({
-          time: perData.id * 1000, // 时间
-          open: perData.open, // 开
-          high: perData.high, // 高
-          low: perData.low, // 低
-          close: perData.close, // 收
-          volume: perData.vol // 交易量
-        })
+        // guard: ensure close exists
+        if(perData && perData.close != null && !isNaN(Number(perData.close))) {
+            chart.updateData(perData1);
+            localStorage.setItem('closeshijian'+SYMBOL,perData.close)
+            this.subscribeDataParam.subscribeData({
+              time: perData.id * 1000, // 时间
+              open: perData.open, // 开
+              high: perData.high, // 高
+              low: perData.low, // 低
+              close: perData.close, // 收
+              volume: perData.vol // 交易量
+            })
+        }
+        // NOTE: we already processed and called subscribeDataParam inside the guarded block above
         
       }
     }

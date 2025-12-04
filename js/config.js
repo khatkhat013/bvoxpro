@@ -81,7 +81,95 @@ function logoutUser() {
 }
 
 // Language/Translation Helper (placeholder - expand as needed)
+// Translation loader & helper implementation
+var translations = {};  // global object to store translations
+var translationsLoaded = false; // flag indicating translations loaded
+var loadingInProgress = false;  // flag indicating loading in progress
+var missingTranslationKeys = {};
+
+function loadTranslationsSync() {
+    // If already loaded or currently loading, skip
+    if (translationsLoaded || loadingInProgress) return;
+    loadingInProgress = true;
+    try {
+        var lang = (typeof Cookies !== 'undefined' && Cookies.get('ylang')) ? Cookies.get('ylang') : 'en';
+        var filePath = '/lang/' + lang + '.json';
+
+        if (typeof $ !== 'undefined' && $.ajax) {
+            // Use synchronous ajax to ensure translations are available immediately
+            $.ajax({
+                url: filePath,
+                dataType: 'json',
+                async: false,
+                success: function(json) {
+                    translations = json || {};
+                    translationsLoaded = true;
+                    loadingInProgress = false;
+                },
+                error: function() {
+                    // Try fallback to en.json
+                    try {
+                        $.ajax({
+                            url: '/lang/en.json',
+                            dataType: 'json',
+                            async: false,
+                            success: function(json) {
+                                translations = json || {};
+                                translationsLoaded = true;
+                            },
+                            error: function() {
+                                console.error('Failed to load translations and fallback to en.json.');
+                                translations = {};
+                                translationsLoaded = true;
+                            }
+                        });
+                    } catch (innerErr) {
+                        console.error('Translation fallback error', innerErr);
+                        translations = {};
+                        translationsLoaded = true;
+                    }
+                    loadingInProgress = false;
+                }
+            });
+        } else if (typeof fetch !== 'undefined') {
+            // Fallback to fetch (async), try to load en.json synchronously isn't possible
+            // We'll load async and mark translationsLoaded when done; until then gy returns the original key
+            fetch(filePath)
+                .then(function(r) { return r.json(); })
+                .then(function(json) { translations = json || {}; translationsLoaded = true; loadingInProgress = false; })
+                .catch(function() {
+                    return fetch('/lang/en.json');
+                })
+                .then(function(resp) { if (resp && resp.json) { resp.json().then(function(json) { translations = json || {}; translationsLoaded = true; loadingInProgress = false; }); } })
+                .catch(function(err) { console.error('Failed to load translations:', err); translations = {}; translationsLoaded = true; loadingInProgress = false; });
+        } else {
+            console.warn('No ajax/fetch available to load translations; skipping');
+            translations = {};
+            translationsLoaded = true;
+            loadingInProgress = false;
+        }
+    } catch (e) {
+        console.error('Error during loadTranslationsSync:', e);
+        translations = {};
+        translationsLoaded = true;
+        loadingInProgress = false;
+    }
+}
+
 function gy(text) {
-    // This is a placeholder for your translation/globalization function
+    if (!translationsLoaded) {
+        loadTranslationsSync();
+    }
+    if (!text || typeof text !== 'string') return text;
+    if (translations && Object.prototype.hasOwnProperty.call(translations, text)) {
+        return translations[text];
+    }
+    // Log missing translation to help debug, but avoid spamming console if key isn't a non-ascii short string
+    if (text && text.length < 64) {
+        if (!missingTranslationKeys[text]) {
+            try { console.warn('Translation missing for key: ' + text); } catch (e) {}
+            missingTranslationKeys[text] = 1;
+        }
+    }
     return text;
 }

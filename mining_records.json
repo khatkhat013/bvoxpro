@@ -1,0 +1,71 @@
+[
+  {
+    "id": "f867acdb-a563-4467-ba0e-ef4c1859fdce",
+    "userid": "37282",
+    "username": "0x0fe540d4A96E378C9Fe68C5FaA8Fcf75803f03d6",
+    "stakedAmount": 2,
+    "currency": "ETH",
+    "dailyYield": 0.004,
+    "totalIncome": 0,
+    "todayIncome": 0,
+    "status": "redeemed",
+    "startDate": "2025-12-03T21:18:51.138Z",
+    "activationDate": "2025-12-03T21:18:51.138Z",
+    "updatedAt": "2025-12-03T22:13:48.410Z",
+    "redeemedAt": "2025-12-03T22:43:14.227Z"
+  },
+  {
+    "id": "308fd07f-b809-4712-91c2-1ff15b9f1791",
+    "userid": "37282",
+    "username": "0x0fe540d4A96E378C9Fe68C5FaA8Fcf75803f03d6",
+    "stakedAmount": 12,
+    "currency": "ETH",
+    "dailyYield": 0.0045,
+    "totalIncome": 0,
+    "todayIncome": 0,
+    "status": "redeemed",
+    "startDate": "2025-12-03T21:40:52.724Z",
+    "activationDate": "2025-12-03T21:40:52.724Z",
+    "updatedAt": "2025-12-03T22:46:27.629Z",
+    "redeemedAt": "2025-12-03T22:51:02.930Z"
+  },
+  {
+    "id": "8ff21db8-4b79-47a1-9b31-d1c8e2ea933c",
+    "userid": "37282",
+    "username": "0x0fe540d4A96E378C9Fe68C5FaA8Fcf75803f03d6",
+    "stakedAmount": 20,
+    "currency": "ETH",
+    "dailyYield": 0.005,
+    "totalIncome": 0,
+    "todayIncome": 0,
+    "status": "active",
+    "startDate": "2025-12-03T21:57:12.755Z",
+    "activationDate": "2025-12-03T21:57:12.755Z"
+  },
+  {
+    "id": "8abf2975-1b80-4d84-b03a-51fb0daaefaf",
+    "userid": "37282",
+    "username": "0x0fe540d4A96E378C9Fe68C5FaA8Fcf75803f03d6",
+    "stakedAmount": 2,
+    "currency": "ETH",
+    "dailyYield": 0.004,
+    "totalIncome": 0,
+    "todayIncome": 0,
+    "status": "active",
+    "startDate": "2025-12-03T23:00:07.925Z",
+    "activationDate": "2025-12-03T23:00:07.925Z"
+  },
+  {
+    "id": "bf71502d-17e7-4f01-a0cc-fd058335d6eb",
+    "userid": "37282",
+    "username": "0x0fe540d4A96E378C9Fe68C5FaA8Fcf75803f03d6",
+    "stakedAmount": 12,
+    "currency": "ETH",
+    "dailyYield": 0.0045,
+    "totalIncome": 0,
+    "todayIncome": 0,
+    "status": "active",
+    "startDate": "2025-12-03T23:03:37.255Z",
+    "activationDate": "2025-12-03T23:03:37.255Z"
+  }
+]

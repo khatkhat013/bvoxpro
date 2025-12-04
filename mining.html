@@ -147,6 +147,30 @@
         </div>
         
         <script>
+            // Configuration for daily yield rates
+            const yieldRates = {
+                0.5: 0.003,   // 0.3%
+                2.0: 0.004,   // 0.4%
+                12.0: 0.0045, // 0.45%
+                20.0: 0.005,  // 0.5%
+                40.0: 0.006   // 0.6%
+            };
+
+            // Get daily yield percentage based on amount
+            function getDailyYield(amount) {
+                if (amount >= 40) return 0.006;
+                if (amount >= 20) return 0.005;
+                if (amount >= 12) return 0.0045;
+                if (amount >= 2) return 0.004;
+                if (amount >= 0.5) return 0.003;
+                return 0;
+            }
+
+            // Format number with decimal places
+            function formatNumber(num, decimals = 6) {
+                return Number(num).toFixed(decimals);
+            }
+
             window.addEventListener('scroll', function() {
                 let currentScrollTop = window.scrollY || document.documentElement.scrollTop;
                 if (currentScrollTop > 0) {
@@ -156,112 +180,278 @@
                 }
             });
 
-            $(document).ready(function() {
-                setInterval(updateCountdown, 1000);
-                $('#zyshuliang').attr('placeholder',gy('请输入质押数量'));
-
+            // Fetch mining statistics
+            function fetchMiningStats() {
                 var userid = Cookies.get('userid');
                 var username = Cookies.get('username');
-                $.ajax({
-                    url: apiurl + '/Mine/getminesy',
-                    type: 'POST',
-                    data: {
-                        'userid': userid,
-                        'username': username,
-                    },
-                    dataType: 'json',
-                    success: function(res) {
-                        if(res.code == 1){
-                            $('.y-mizong').text(Number(res.data.total_jine).toFixed(6));
-                            $('.y-mijin').text(Number(res.data.recent_jine).toFixed(6));
-                            $('#y-zyzs').text(Number(res.data.total_shuliang).toFixed(6));
 
-                        }else{
-                            alert(gy(res.data));
-                        }
-                    }
-                });
-            });
-
-            function updateCountdown() {
-                const now = new Date();
-                
-                // 获取纽约时区的当前时间
-                const newYorkTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-
-                // 计算下一个凌晨 00:30 的时间
-                let nextMidnight = new Date(newYorkTime);
-                nextMidnight.setHours(0, 30, 0, 0); // 设置到当天 00:30
-                
-                // 如果当前时间已经超过了今天的凌晨 00:30，则设定为明天的 00:30
-                if (newYorkTime >= nextMidnight) {
-                    nextMidnight.setDate(nextMidnight.getDate() + 1);
-                }
-
-                // 计算时间差
-                const timeDifference = nextMidnight - newYorkTime;
-
-                // 如果倒计时结束，刷新页面
-                if (timeDifference <= 0) {
-                    location.reload();
+                if (!userid) {
+                    console.warn('⚠️ User ID not found in cookies');
                     return;
                 }
 
-                // 计算时、分、秒
-                const hours = Math.floor(timeDifference / (1000 * 60 * 60));
-                const minutes = Math.floor((timeDifference % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((timeDifference % (1000 * 60)) / 1000);
+                console.log('🔄 Fetching mining stats for user:', userid);
 
-                // 格式化时间
-                const formattedTime = 
-                    String(hours).padStart(2, '0') + ":" +
-                    String(minutes).padStart(2, '0') + ":" +
-                    String(seconds).padStart(2, '0');
+                $.ajax({
+                    url: 'http://localhost:3000/api/Mine/getminesy',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        userid: userid,
+                        username: username,
+                    }),
+                    timeout: 5000,
+                    dataType: 'json',
+                    success: function(res) {
+                        console.log('📊 Mining stats response:', res);
 
-                // 显示倒计时
-                document.getElementById("y-jjsy").textContent = formattedTime;
+                        if (res.code == 1) {
+                            const totalIncome = Number(res.data.total_jine || 0).toFixed(6);
+                            const todayIncome = Number(res.data.recent_jine || 0).toFixed(6);
+                            const stakedAmount = Number(res.data.total_shuliang || 0).toFixed(6);
+
+                            $('.y-mizong').text(totalIncome);
+                            $('.y-mijin').text(todayIncome);
+                            $('#y-zyzs').text(stakedAmount);
+
+                            console.log('✅ Mining stats updated:', {
+                                total_income: totalIncome,
+                                today_income: todayIncome,
+                                staked_amount: stakedAmount
+                            });
+                        } else {
+                            console.warn('⚠️ Failed to get mining stats:', res.data);
+                        }
+                    },
+                    error: function(err) {
+                        console.warn('⚠️ Error fetching mining stats:', err);
+                        // Use default values if API fails
+                        $('.y-mizong').text('0.000000');
+                        $('.y-mijin').text('0.000000');
+                        $('#y-zyzs').text('0.000000');
+                    }
+                });
+            }
+
+            $(document).ready(function() {
+                console.log('🚀 Mining page initialized');
+
+                // Set placeholder
+                $('#zyshuliang').attr('placeholder', gy('请输入质押数量'));
+
+                // Fetch initial stats
+                fetchMiningStats();
+
+                // Refresh stats every 30 seconds
+                setInterval(fetchMiningStats, 30000);
+
+                // Update countdown every second
+                setInterval(updateCountdown, 1000);
+            });
+
+            function updateCountdown() {
+                try {
+                    const now = new Date();
+                    
+                    // Get New York time (EST/EDT timezone)
+                    const newYorkTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+
+                    // Calculate next midnight at 00:30 New York time
+                    let nextMidnight = new Date(newYorkTime);
+                    nextMidnight.setHours(0, 30, 0, 0);
+                    
+                    // If current time is already past 00:30, set for tomorrow
+                    if (newYorkTime >= nextMidnight) {
+                        nextMidnight.setDate(nextMidnight.getDate() + 1);
+                    }
+
+                    // Calculate time difference
+                    const timeDifference = nextMidnight - newYorkTime;
+
+                    // If countdown finished, reload page
+                    if (timeDifference <= 0) {
+                        location.reload();
+                        return;
+                    }
+
+                    // Calculate hours, minutes, seconds
+                    const hours = Math.floor(timeDifference / (1000 * 60 * 60));
+                    const minutes = Math.floor((timeDifference % (1000 * 60 * 60)) / (1000 * 60));
+                    const seconds = Math.floor((timeDifference % (1000 * 60)) / 1000);
+
+                    // Format time with leading zeros
+                    const formattedTime = 
+                        String(hours).padStart(2, '0') + ":" +
+                        String(minutes).padStart(2, '0') + ":" +
+                        String(seconds).padStart(2, '0');
+
+                    // Update countdown display
+                    document.getElementById("y-jjsy").textContent = formattedTime;
+                    
+                } catch (error) {
+                    console.error('⚠️ Error updating countdown:', error);
+                    // Set default display if error
+                    document.getElementById("y-jjsy").textContent = "00:00:00";
+                }
             }
 
             function showzykuang(){
+                // Clear previous input
+                $('#zyshuliang').val('');
+                
+                // Show staking dialog
                 $('.y-ex-duih').show();
                 $('.y-ex-dqrz').show();
+
+                console.log('🔓 Staking dialog opened');
             }
 
             $('.y-ex-dqrz').click(function(){
+                console.log('🔐 Closing staking dialog');
+                
+                // Reset dialog state
+                $('.y-load').hide();
+                $('.y-ex-success').hide();
+                $('.y-ex-dtit').show();
+                $('.y-ex-dner').show();
+                $('.y-ex-dqr').show();
+                $('.y-ex-next').hide();
+                
+                // Clear input
+                $('#zyshuliang').val('');
+                
+                // Hide dialog
                 $('.y-ex-duih').hide();
                 $('.y-ex-dqrz').hide();
             });
 
             $('.y-ex-dqr').click(function(){
+                console.log('📤 Submit button clicked');
                 submitorder();
             });
 
             function submitorder(){
                 var userid = Cookies.get('userid');
                 var username = Cookies.get('username');
-
                 var jine = $('#zyshuliang').val();
 
-                if(jine){
-                    $.ajax({
-                        url: apiurl + '/Mine/setmineorder',
-                        type: 'POST',
-                        data: {
-                            'userid': userid,
-                            'username': username,
-                            'jine': jine,
-                        },
-                        dataType: 'json',
-                        success: function(res) {
-                            if(res.code == 1){
-                                alert(gy('下单成功'));
-                                location.reload();
-                            }else{
-                                alert(gy(res.data));
-                            }
-                        }
-                    });
+                // Validation
+                if (!userid) {
+                    alert(gy('User ID not found. Please login again.'));
+                    return;
                 }
+
+                if (!jine || isNaN(jine)) {
+                    alert(gy('Please enter a valid staking amount'));
+                    return;
+                }
+
+                const amount = parseFloat(jine);
+
+                // Validate minimum amount
+                if (amount < 0.5) {
+                    alert(gy('Minimum staking amount is 0.5 ETH'));
+                    return;
+                }
+
+                // Get daily yield for display
+                const dailyYield = getDailyYield(amount);
+                const dailyYieldPercent = (dailyYield * 100).toFixed(2);
+
+                console.log('📝 Submitting mining order:', {
+                    userid: userid,
+                    username: username,
+                    amount: amount,
+                    dailyYield: dailyYieldPercent + '%'
+                });
+
+                // Show loading state
+                $('.y-load').show();
+                $('.y-ex-dtit').hide();
+                $('.y-ex-dner').hide();
+                $('.y-ex-dqr').hide();
+
+                // Submit to backend
+                $.ajax({
+                    url: 'http://localhost:3000/api/Mine/setmineorder',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        userid: userid,
+                        username: username,
+                        jine: amount,
+                    }),
+                    timeout: 5000,
+                    dataType: 'json',
+                    xhrFields: {
+                        withCredentials: false
+                    },
+                    success: function(res) {
+                        console.log('✅ Mining order response:', res);
+
+                        if (res.code == 1) {
+                            // Show success state
+                            $('.y-load').hide();
+                            $('.y-ex-success').show();
+                            $('.y-ex-next').show();
+
+                            console.log('✅ Staking successful:', {
+                                orderId: res.data.orderId,
+                                amount: res.data.amount,
+                                currency: res.data.currency,
+                                dailyYield: res.data.dailyYield,
+                                newBalance: res.data.newBalance,
+                                status: res.data.status
+                            });
+
+                            // Show success message
+                            alert(gy('Mining started successfully! Balance updated: ' + res.data.newBalance.toFixed(2) + ' ETH remaining'));
+
+                            // Refresh mining stats after delay
+                            setTimeout(function() {
+                                fetchMiningStats();
+                                // Close dialog after 2 seconds
+                                setTimeout(function() {
+                                    $('.y-ex-dqrz').click();
+                                }, 2000);
+                            }, 1000);
+
+                        } else {
+                            console.error('❌ Mining order failed:', res.data);
+                            
+                            // Show specific error messages
+                            if (res.data.includes('Insufficient')) {
+                                alert(gy(res.data));
+                            } else if (res.data.includes('minimum')) {
+                                alert(gy(res.data));
+                            } else {
+                                alert(gy('Staking failed: ' + res.data));
+                            }
+                            
+                            // Reset dialog
+                            $('.y-load').hide();
+                            $('.y-ex-dtit').show();
+                            $('.y-ex-dner').show();
+                            $('.y-ex-dqr').show();
+                        }
+                    },
+                    error: function(err) {
+                        console.error('❌ Error submitting mining order:', err);
+                        
+                        // Reset dialog
+                        $('.y-load').hide();
+                        $('.y-ex-dtit').show();
+                        $('.y-ex-dner').show();
+                        $('.y-ex-dqr').show();
+                        
+                        // Show error message
+                        if (err.statusText === 'timeout') {
+                            alert(gy('Request timeout. Please try again.'));
+                        } else {
+                            alert(gy('Staking error: Network connection failed'));
+                        }
+                    }
+                });
             }
 
         </script>

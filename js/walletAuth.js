@@ -295,6 +295,12 @@ class WalletAuthSystem {
     setUserId(userId) {
         // Save in multiple places for redundancy
         Cookies.set('walletUserId', userId, { expires: 365 });
+        // Also set legacy cookie key used across pages (`userid`) so existing pages find the ID
+        try {
+            Cookies.set('userid', String(userId), { expires: 365 });
+        } catch (e) {
+            // ignore if Cookies not available
+        }
         localStorage.setItem('walletUserId', userId);
         sessionStorage.setItem('walletUserId', userId);
         console.log('✓ User ID saved:', userId);

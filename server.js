@@ -46,6 +46,31 @@ const mimeTypes = {
     '.woff2': 'font/woff2',
 };
 
+// Helper: parse request body (supports JSON and x-www-form-urlencoded) from a POST event
+function parseBodyString(body) {
+    if (!body || typeof body !== 'string') return {};
+    // Some POST bodies include appended querylike strings (e.g., '}&token=...' appended by jQuery beforeSend) – normalize
+    let jsonBody = body;
+    if (body.includes('}&')) {
+        jsonBody = body.substring(0, body.indexOf('}&') + 1);
+    }
+    // Try JSON first
+    try {
+        return JSON.parse(jsonBody);
+    } catch (e) {
+        // Fallback: parse x-www-form-urlencoded format
+        const data = {};
+        jsonBody.split('&').forEach(pair => {
+            if (!pair) return;
+            const parts = pair.split('=');
+            const key = decodeURIComponent(parts[0] || '').trim();
+            const val = decodeURIComponent((parts[1] || '').replace(/\+/g, ' ')).trim();
+            if (key) data[key] = val;
+        });
+        return data;
+    }
+}
+
 // Create HTTP Server
 const server = http.createServer((req, res) => {
     try {
@@ -303,6 +328,461 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // ========== MINING API ENDPOINTS ==========
+
+    // Get mining statistics (POST) - /api/Mine/getminesy
+    if ((pathname === '/api/Mine/getminesy' || pathname === '/api/mine/getminesy') && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // Clean body if needed
+                let jsonBody = body;
+                if (body.includes('}&')) {
+                    jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                }
+                
+                const data = JSON.parse(jsonBody);
+                const { userid, username } = data;
+
+                if (!userid) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'User ID is required' }));
+                    return;
+                }
+
+                // Read mining records from JSON file
+                const miningFile = path.join(__dirname, 'mining_records.json');
+                let miningRecords = [];
+                if (fs.existsSync(miningFile)) {
+                    try {
+                        miningRecords = JSON.parse(fs.readFileSync(miningFile, 'utf8')) || [];
+                    } catch (e) {
+                        miningRecords = [];
+                    }
+                }
+
+                // Get active mining records for user
+                const userMiningRecords = miningRecords.filter(m => m.userid === userid && m.status === 'active');
+
+                if (userMiningRecords.length === 0) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        code: 1,
+                        data: {
+                            total_shuliang: 0,
+                            total_jine: 0,
+                            recent_jine: 0,
+                        }
+                    }));
+                    return;
+                }
+
+                // Calculate totals
+                const total_shuliang = userMiningRecords.reduce((sum, m) => sum + (m.stakedAmount || 0), 0);
+                const total_jine = userMiningRecords.reduce((sum, m) => sum + (m.totalIncome || 0), 0);
+                const recent_jine = userMiningRecords.reduce((sum, m) => sum + (m.todayIncome || 0), 0);
+
+                console.log(`[MINING] Stats for user ${userid}:`, { total_shuliang, total_jine, recent_jine });
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    code: 1,
+                    data: {
+                        total_shuliang: total_shuliang,
+                        total_jine: total_jine,
+                        recent_jine: recent_jine,
+                    }
+                }));
+            } catch (e) {
+                console.error('[MINING getminesy] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: 'Failed to get mining stats' }));
+            }
+        });
+        return;
+    }
+
+    // Get mining records for a user (GET) - /api/Mine/records/:userid
+    if ((pathname.startsWith('/api/Mine/records/') || pathname.startsWith('/api/mine/records/')) && req.method === 'GET') {
+        try {
+            const parts = pathname.split('/');
+            const userid = parts.pop() || parts.pop();
+            const miningFile = path.join(__dirname, 'mining_records.json');
+            let miningRecords = [];
+            if (fs.existsSync(miningFile)) {
+                try { miningRecords = JSON.parse(fs.readFileSync(miningFile, 'utf8')) || []; } catch (e) { miningRecords = []; }
+            }
+
+            const records = miningRecords.filter(m => m.userid === userid);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 1, data: records.map(r => ({
+                orderId: r.id || r.orderId,
+                amount: r.stakedAmount || r.amount || 0,
+                currency: r.currency || 'ETH',
+                dailyYield: typeof r.dailyYield === 'number' ? (r.dailyYield * 100) + '%' : (r.dailyYield || ''),
+                totalIncome: r.totalIncome || 0,
+                todayIncome: r.todayIncome || 0,
+                status: r.status || 'active',
+                startDate: r.startDate || r.createdAt || new Date().toISOString()
+            })) }));
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 0, data: 'Failed to read mining records' }));
+        }
+        return;
+    }
+
+    // ADMIN: get all mining records (GET) - /api/admin/mining-records
+    if (pathname === '/api/admin/mining-records' && req.method === 'GET') {
+        try {
+            const miningFile = path.join(__dirname, 'mining_records.json');
+            let miningRecords = [];
+            if (fs.existsSync(miningFile)) {
+                try { miningRecords = JSON.parse(fs.readFileSync(miningFile, 'utf8')) || []; } catch (e) { miningRecords = []; }
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 1, data: miningRecords.map(r => ({
+                orderId: r.id || r.orderId,
+                userid: r.userid,
+                amount: r.stakedAmount || r.amount || 0,
+                currency: r.currency || 'ETH',
+                totalIncome: r.totalIncome || 0,
+                todayIncome: r.todayIncome || 0,
+                status: r.status || 'active',
+                startDate: r.startDate || r.createdAt || new Date().toISOString()
+            })) }));
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 0, data: 'Failed to read mining records' }));
+        }
+        return;
+    }
+
+    // ADMIN: complete redeem (POST) - /api/admin/mine/redeem/complete
+    if (pathname === '/api/admin/mine/redeem/complete' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                let jsonBody = body;
+                if (body && body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                const data = JSON.parse(jsonBody || '{}');
+                const id = data.id || data.orderId;
+                if (!id) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'Missing id' })); return;
+                }
+
+                const miningFile = path.join(__dirname, 'mining_records.json');
+                let miningRecords = [];
+                if (fs.existsSync(miningFile)) {
+                    try { miningRecords = JSON.parse(fs.readFileSync(miningFile, 'utf8')) || []; } catch (e) { miningRecords = []; }
+                }
+
+                const idx = miningRecords.findIndex(m => (m.id === id || m.orderId === id));
+                if (idx === -1) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'Record not found' })); return;
+                }
+
+                const record = miningRecords[idx];
+                if (record.status === 'redeemed') {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 1, data: 'Already redeemed' })); return;
+                }
+
+                // Credit user's balance
+                const usersFile = path.join(__dirname, 'users.json');
+                let users = [];
+                if (fs.existsSync(usersFile)) {
+                    try { users = JSON.parse(fs.readFileSync(usersFile, 'utf8')) || []; } catch (e) { users = []; }
+                }
+
+                const userIndex = users.findIndex(u => u.userid === record.userid || u.uid === record.userid);
+                if (userIndex !== -1) {
+                    users[userIndex].balances = users[userIndex].balances || {};
+                    users[userIndex].balances.eth = (users[userIndex].balances.eth || 0) + (record.stakedAmount || record.amount || 0);
+                    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+                }
+
+                // Mark record redeemed
+                miningRecords[idx].status = 'redeemed';
+                miningRecords[idx].redeemedAt = new Date().toISOString();
+                fs.writeFileSync(miningFile, JSON.stringify(miningRecords, null, 2));
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: 'Redeem completed' }));
+            } catch (err) {
+                console.error('[admin redeem complete] Error:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: 'Server error' }));
+            }
+        });
+        return;
+    }
+
+    // Create mining order (POST) - /api/Mine/setmineorder
+    if ((pathname === '/api/Mine/setmineorder' || pathname === '/api/mine/setmineorder') && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // Clean body if needed
+                let jsonBody = body;
+                if (body.includes('}&')) {
+                    jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                }
+                
+                const data = JSON.parse(jsonBody);
+                const { userid, username, jine } = data;
+
+                if (!userid || !jine || isNaN(jine)) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'Invalid input parameters' }));
+                    return;
+                }
+
+                const amount = parseFloat(jine);
+
+                // Validate staking amount
+                if (amount <= 0) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'Staking amount must be greater than 0' }));
+                    return;
+                }
+
+                // Check minimum
+                if (amount < 0.5) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'Staking amount must be at least 0.5 ETH' }));
+                    return;
+                }
+
+                // Get user from JSON
+                const usersFile = path.join(__dirname, 'users.json');
+                let users = [];
+                if (fs.existsSync(usersFile)) {
+                    users = JSON.parse(fs.readFileSync(usersFile, 'utf8')) || [];
+                }
+
+                const userIndex = users.findIndex(u => u.userid === userid || u.uid === userid);
+                if (userIndex === -1) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'User not found' }));
+                    return;
+                }
+
+                const user = users[userIndex];
+                const currentBalance = user.balances?.eth || 0;
+
+                // Check if user has sufficient balance
+                if (currentBalance < amount) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: `Insufficient ETH balance. Current: ${currentBalance} ETH, Required: ${amount} ETH` }));
+                    return;
+                }
+
+                // Determine daily yield
+                let dailyYield = 0;
+                if (amount >= 40) dailyYield = 0.006;
+                else if (amount >= 20) dailyYield = 0.005;
+                else if (amount >= 12) dailyYield = 0.0045;
+                else if (amount >= 2) dailyYield = 0.004;
+                else if (amount >= 0.5) dailyYield = 0.003;
+
+                // Deduct balance
+                const newBalance = currentBalance - amount;
+                user.balances = user.balances || {};
+                user.balances.eth = newBalance;
+
+                // Save updated users
+                fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+
+                // Create mining record
+                const miningFile = path.join(__dirname, 'mining_records.json');
+                let miningRecords = [];
+                if (fs.existsSync(miningFile)) {
+                    try {
+                        miningRecords = JSON.parse(fs.readFileSync(miningFile, 'utf8')) || [];
+                    } catch (e) {
+                        miningRecords = [];
+                    }
+                }
+
+                const miningRecord = {
+                    id: uuidv4(),
+                    userid: userid,
+                    username: username || user.username || `User_${userid}`,
+                    stakedAmount: amount,
+                    currency: 'ETH',
+                    dailyYield: dailyYield,
+                    totalIncome: 0,
+                    todayIncome: 0,
+                    status: 'active',
+                    startDate: new Date().toISOString(),
+                    activationDate: new Date().toISOString(),
+                };
+
+                miningRecords.push(miningRecord);
+                fs.writeFileSync(miningFile, JSON.stringify(miningRecords, null, 2));
+
+                console.log('[MINING] Order created:', {
+                    userid,
+                    amount,
+                    dailyYield: (dailyYield * 100) + '%',
+                    newBalance
+                });
+
+                // Schedule auto-rewards (every 24 hours)
+                scheduleRewards(userid, amount, dailyYield, miningRecord.id);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    code: 1,
+                    data: {
+                        orderId: miningRecord.id,
+                        amount: amount,
+                        currency: 'ETH',
+                        dailyYield: (dailyYield * 100) + '%',
+                        status: 'active',
+                        newBalance: newBalance,
+                        message: 'Mining started successfully. Daily rewards will be added automatically.'
+                    }
+                }));
+            } catch (e) {
+                console.error('[MINING setmineorder] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: 'Failed to create mining order: ' + e.message }));
+            }
+        });
+        return;
+    }
+
+    // Redeem / start redeeming a mining order (POST) - /api/Mine/shuhui
+    if ((pathname === '/api/Mine/shuhui' || pathname === '/api/mine/shuhui') && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                let jsonBody = body;
+                if (body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                // Accept JSON or form-encoded
+                let data;
+                try { data = JSON.parse(jsonBody); } catch (e) {
+                    data = {};
+                    jsonBody.split('&').forEach(pair => {
+                        if (!pair) return;
+                        const parts = pair.split('=');
+                        data[decodeURIComponent(parts[0] || '')] = decodeURIComponent((parts[1] || '').replace(/\+/g, ' '));
+                    });
+                }
+
+                const id = data.id || data.orderId || data.orderID;
+                const userid = data.userid;
+
+                if (!id || !userid) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'Missing id or userid' }));
+                    return;
+                }
+
+                const miningFile = path.join(__dirname, 'mining_records.json');
+                let miningRecords = [];
+                if (fs.existsSync(miningFile)) {
+                    try { miningRecords = JSON.parse(fs.readFileSync(miningFile, 'utf8')) || []; } catch (e) { miningRecords = []; }
+                }
+
+                const idx = miningRecords.findIndex(m => (m.id === id || m.orderId === id) && (m.userid === userid || m.userId === userid));
+                if (idx === -1) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'Record not found' }));
+                    return;
+                }
+
+                // Mark as redeeming
+                miningRecords[idx].status = 'redeeming';
+                miningRecords[idx].updatedAt = new Date().toISOString();
+                fs.writeFileSync(miningFile, JSON.stringify(miningRecords, null, 2));
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: 'Redeem request submitted' }));
+            } catch (err) {
+                console.error('[MINING shuhui] Error:', err.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: err.message }));
+            }
+        });
+        return;
+    }
+
+    // Schedule rewards function
+    function scheduleRewards(userid, stakedAmount, dailyYield, miningId) {
+        const dailyReward = stakedAmount * dailyYield;
+        
+        console.log(`[MINING SCHEDULER] Started for user ${userid}:`, {
+            stakedAmount,
+            dailyYield: (dailyYield * 100) + '%',
+            dailyReward: dailyReward.toFixed(8) + ' ETH'
+        });
+
+        // Set interval to add rewards every 24 hours
+        const rewardInterval = setInterval(() => {
+            try {
+                // Read current user data
+                const usersFile = path.join(__dirname, 'users.json');
+                let users = [];
+                if (fs.existsSync(usersFile)) {
+                    users = JSON.parse(fs.readFileSync(usersFile, 'utf8')) || [];
+                }
+
+                const userIndex = users.findIndex(u => u.userid === userid || u.uid === userid);
+                if (userIndex === -1) {
+                    console.log(`[MINING SCHEDULER] User ${userid} not found, stopping rewards`);
+                    clearInterval(rewardInterval);
+                    return;
+                }
+
+                const user = users[userIndex];
+                const currentBalance = user.balances?.eth || 0;
+                const newBalance = currentBalance + dailyReward;
+
+                user.balances = user.balances || {};
+                user.balances.eth = newBalance;
+
+                // Save updated users
+                fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+
+                // Update mining record
+                const miningFile = path.join(__dirname, 'mining_records.json');
+                let miningRecords = [];
+                if (fs.existsSync(miningFile)) {
+                    try {
+                        miningRecords = JSON.parse(fs.readFileSync(miningFile, 'utf8')) || [];
+                    } catch (e) {
+                        miningRecords = [];
+                    }
+                }
+
+                const miningIndex = miningRecords.findIndex(m => m.id === miningId);
+                if (miningIndex !== -1) {
+                    miningRecords[miningIndex].totalIncome = (miningRecords[miningIndex].totalIncome || 0) + dailyReward;
+                    miningRecords[miningIndex].todayIncome = dailyReward;
+                    miningRecords[miningIndex].lastIncomeAt = new Date().toISOString();
+                    fs.writeFileSync(miningFile, JSON.stringify(miningRecords, null, 2));
+                }
+
+                console.log(`[MINING REWARD] Added ${dailyReward.toFixed(8)} ETH to user ${userid}`, {
+                    newBalance: newBalance.toFixed(8) + ' ETH'
+                });
+            } catch (error) {
+                console.error(`[MINING SCHEDULER] Error for user ${userid}:`, error.message);
+            }
+        }, 24 * 60 * 60 * 1000); // Every 24 hours
+    }
+
     // WALLET API ENDPOINTS
     
     // Get wallet balance (GET) - accept ?userid= for browser/direct requests
@@ -413,6 +893,198 @@ const server = http.createServer((req, res) => {
                 console.error('[wallet-getbalance] Error:', e.message);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ code: 0, error: e.message, success: false }));
+            }
+        });
+        return;
+    }
+
+    // Legacy alias: some pages call /api/Record/getloan — rewrite to Wallet/getloaned
+    if ((pathname === '/api/Record/getloan' || pathname === '/api/record/getloan') && req.method === 'POST') {
+        pathname = '/api/Wallet/getloaned';
+    }
+
+    // Loan: get loan summary for user (POST) - /api/Wallet/getloaned
+    if ((pathname === '/api/Wallet/getloaned' || pathname === '/api/wallet/getloaned') && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // parse urlencoded or json
+                let data = {};
+                if (body && body.includes('{')) {
+                    try { data = JSON.parse(body); } catch (e) { /* fallthrough */ }
+                }
+                if (Object.keys(data).length === 0) {
+                    body.split('&').forEach(pair => {
+                        if (!pair) return;
+                        const parts = pair.split('=');
+                        const key = decodeURIComponent(parts[0] || '').trim();
+                        const val = decodeURIComponent((parts[1] || '').replace(/\+/g, ' ')).trim();
+                        if (key) data[key] = val;
+                    });
+                }
+
+                const userid = data.userid || data.user_id;
+                if (!userid) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'Missing userid' }));
+                    return;
+                }
+
+                // Load user loan quota from users.json (fallback default)
+                const usersFile = path.join(__dirname, 'users.json');
+                let users = [];
+                if (fs.existsSync(usersFile)) {
+                    try { users = JSON.parse(fs.readFileSync(usersFile, 'utf8')) || []; } catch (e) { users = []; }
+                }
+                const user = users.find(u => u.userid === userid || u.uid === userid) || {};
+                const loanQuota = Number(user.loan_quota || user.loan_limit || 1000);
+
+                // Load loan records
+                const loansFile = path.join(__dirname, 'loans_records.json');
+                let loans = [];
+                if (fs.existsSync(loansFile)) {
+                    try { loans = JSON.parse(fs.readFileSync(loansFile, 'utf8')) || []; } catch (e) { loans = []; }
+                }
+
+                const userLoans = loans.filter(l => String(l.userid) === String(userid));
+                const total_jine = userLoans.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+                const total_weihuan = userLoans.reduce((s, r) => {
+                    const st = (r.status || '').toLowerCase();
+                    if (st === 'repaid' || st === 'redeemed' || st === 'returned') return s; // exclude repaid
+                    return s + (parseFloat(r.amount) || 0);
+                }, 0);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: { edu: loanQuota, total_jine: total_jine, total_weihuan: total_weihuan } }));
+            } catch (err) {
+                console.error('[getloaned] Error:', err.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: 'Server error' }));
+            }
+        });
+        return;
+    }
+
+    // Loan: submit loan application (POST) - /api/Wallet/addloan
+    if ((pathname === '/api/Wallet/addloan' || pathname === '/api/wallet/addloan') && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                let data = {};
+                if (body && body.includes('{')) {
+                    try { data = JSON.parse(body); } catch (e) { /* ignore */ }
+                }
+                if (Object.keys(data).length === 0) {
+                    body.split('&').forEach(pair => {
+                        if (!pair) return;
+                        const parts = pair.split('=');
+                        const key = decodeURIComponent(parts[0] || '').trim();
+                        const val = decodeURIComponent((parts[1] || '').replace(/\+/g, ' ')).trim();
+                        if (key) data[key] = val;
+                    });
+                }
+
+                const userid = data.userid;
+                const username = data.username;
+                const shuliang = parseFloat(data.shuliang) || 0;
+                const tianshu = parseInt(data.tianshu) || 0;
+                const lixi = parseFloat(data.lixi) || 0;
+                const zfxx = data.zfxx || '';
+                const srzm = data.srzm || '';
+                const yhxx = data.yhxx || '';
+                const sfz = data.sfz || '';
+
+                if (!userid || !username || !shuliang || !tianshu) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'Missing required fields' }));
+                    return;
+                }
+
+                const loansFile = path.join(__dirname, 'loans_records.json');
+                let loans = [];
+                if (fs.existsSync(loansFile)) {
+                    try { loans = JSON.parse(fs.readFileSync(loansFile, 'utf8')) || []; } catch (e) { loans = []; }
+                }
+
+                const record = {
+                    id: uuidv4(),
+                    orderId: uuidv4(),
+                    userid: userid,
+                    username: username,
+                    amount: shuliang,
+                    days: tianshu,
+                    interest: lixi,
+                    images: { zfxx, srzm, yhxx, sfz },
+                    status: 'pending',
+                    created_at: new Date().toISOString()
+                };
+
+                loans.push(record);
+                fs.writeFileSync(loansFile, JSON.stringify(loans, null, 2));
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: 'Application submitted' }));
+            } catch (err) {
+                console.error('[addloan] Error:', err.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: 'Server error' }));
+            }
+        });
+        return;
+    }
+
+    // Wallet image upload alias - /api/Wallet/upload_image
+    if ((pathname === '/api/Wallet/upload_image' || pathname === '/api/wallet/upload_image') && req.method === 'POST') {
+        let chunks = [];
+        req.on('data', chunk => { chunks.push(chunk); });
+        req.on('end', () => {
+            try {
+                const uploadsDir = path.join(__dirname, 'uploads');
+                if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+                const contentType = (req.headers['content-type'] || '').toString();
+                const buffer = Buffer.concat(chunks || []);
+
+                let fileBuffer = buffer;
+                let ext = '.png';
+
+                if (contentType.indexOf('multipart/form-data') !== -1) {
+                    // Parse multipart form-data to extract file bytes
+                    const m = contentType.match(/boundary=(.*)$/);
+                    const boundary = m ? ('--' + m[1]) : null;
+                    if (boundary) {
+                        const boundaryBuf = Buffer.from('\r\n' + boundary);
+                        const startIdx = buffer.indexOf(Buffer.from('\r\n\r\n'));
+                        if (startIdx !== -1) {
+                            const fileStart = startIdx + 4;
+                            const endIdx = buffer.indexOf(boundaryBuf, fileStart);
+                            const fileEnd = endIdx !== -1 ? endIdx : buffer.length;
+                            fileBuffer = buffer.slice(fileStart, fileEnd);
+                        }
+                        // attempt to sniff MIME type from header preamble
+                        const headerPart = buffer.slice(0, startIdx > -1 ? startIdx : 0).toString();
+                        const ctMatch = headerPart.match(/Content-Type:\s*([^\r\n]+)/i);
+                        if (ctMatch) {
+                            const mime = ctMatch[1].trim().toLowerCase();
+                            if (mime.includes('png')) ext = '.png';
+                            else if (mime.includes('jpeg') || mime.includes('jpg')) ext = '.jpg';
+                            else if (mime.includes('gif')) ext = '.gif';
+                        }
+                    }
+                }
+
+                const filename = 'proof_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9) + ext;
+                const uploadPath = path.join(uploadsDir, filename);
+                fs.writeFileSync(uploadPath, fileBuffer);
+                const fileUrl = '/uploads/' + filename;
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: fileUrl, message: 'Image uploaded successfully' }));
+            } catch (err) {
+                console.error('[wallet-upload-image] Error:', err.message, err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: err.message }));
             }
         });
         return;
@@ -821,6 +1493,203 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // ADMIN: get all loan records (GET) - /api/admin/loan-records
+    if (pathname === '/api/admin/loan-records' && req.method === 'GET') {
+        try {
+            const loansFile = path.join(__dirname, 'loans_records.json');
+            let loans = [];
+            if (fs.existsSync(loansFile)) {
+                try { loans = JSON.parse(fs.readFileSync(loansFile, 'utf8')) || []; } catch (e) { loans = []; }
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 1, data: loans }));
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 0, data: 'Failed to read loan records' }));
+        }
+        return;
+    }
+
+    // ADMIN: approve loan (POST) - /api/admin/loan/approve
+    if (pathname === '/api/admin/loan/approve' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                if (body && body.includes('}&')) body = body.substring(0, body.indexOf('}&') + 1);
+                const data = JSON.parse(body || '{}');
+                const id = data.id || data.orderId;
+                if (!id) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: 0, data: 'Missing id' })); return; }
+
+                const loansFile = path.join(__dirname, 'loans_records.json');
+                let loans = [];
+                if (fs.existsSync(loansFile)) {
+                    try { loans = JSON.parse(fs.readFileSync(loansFile, 'utf8')) || []; } catch (e) { loans = []; }
+                }
+
+                const idx = loans.findIndex(l => (l.id === id || l.orderId === id));
+                if (idx === -1) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: 0, data: 'Record not found' })); return; }
+
+                loans[idx].status = 'approved';
+                loans[idx].updated_at = new Date().toISOString();
+                fs.writeFileSync(loansFile, JSON.stringify(loans, null, 2));
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: 'Loan approved' }));
+            } catch (err) {
+                console.error('[admin loan approve] Error:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: 'Server error' }));
+            }
+        });
+        return;
+    }
+
+    // ADMIN: reject loan (POST) - /api/admin/loan/reject
+    if (pathname === '/api/admin/loan/reject' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                if (body && body.includes('}&')) body = body.substring(0, body.indexOf('}&') + 1);
+                const data = JSON.parse(body || '{}');
+                const id = data.id || data.orderId;
+                if (!id) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: 0, data: 'Missing id' })); return; }
+
+                const loansFile = path.join(__dirname, 'loans_records.json');
+                let loans = [];
+                if (fs.existsSync(loansFile)) {
+                    try { loans = JSON.parse(fs.readFileSync(loansFile, 'utf8')) || []; } catch (e) { loans = []; }
+                }
+
+                const idx = loans.findIndex(l => (l.id === id || l.orderId === id));
+                if (idx === -1) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: 0, data: 'Record not found' })); return; }
+
+                loans[idx].status = 'rejected';
+                loans[idx].updated_at = new Date().toISOString();
+                fs.writeFileSync(loansFile, JSON.stringify(loans, null, 2));
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: 'Loan rejected' }));
+            } catch (err) {
+                console.error('[admin loan reject] Error:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: 'Server error' }));
+            }
+        });
+        return;
+    }
+
+    // ADMIN: approve KYC (POST) - /api/admin/kyc/approve
+    if (pathname === '/api/admin/kyc/approve' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                if (body && body.includes('}&')) body = body.substring(0, body.indexOf('}&') + 1);
+                const data = JSON.parse(body || '{}');
+                const { id, reviewer } = data;
+                if (!id) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: 0, data: 'Missing id' })); return; }
+
+                const kycPath = path.join(__dirname, 'kyc_records.json');
+                let kyc = [];
+                if (fs.existsSync(kycPath)) {
+                    try { kyc = JSON.parse(fs.readFileSync(kycPath, 'utf8')) || []; } catch (e) { kyc = []; }
+                }
+
+                const idx = kyc.findIndex(r => r.id === id);
+                if (idx === -1) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: 0, data: 'KYC record not found' })); return; }
+
+                kyc[idx].status = 'approved';
+                kyc[idx].reviewed_at = new Date().toISOString();
+                kyc[idx].reviewed_by = reviewer || 'admin';
+                fs.writeFileSync(kycPath, JSON.stringify(kyc, null, 2));
+
+                // Update user's kycStatus in users.json
+                const usersPath = path.join(__dirname, 'users.json');
+                if (fs.existsSync(usersPath)) {
+                    try {
+                        const users = JSON.parse(fs.readFileSync(usersPath, 'utf8')) || [];
+                        const userIdx = users.findIndex(u => u.userid == kyc[idx].userid || u.uid == kyc[idx].userid);
+                        if (userIdx !== -1) {
+                            // Set kycStatus depending on stage
+                            if (!users[userIdx].kycStatus) users[userIdx].kycStatus = 'none';
+                            if (kyc[idx].stage == 1) users[userIdx].kycStatus = 'basic';
+                            if (kyc[idx].stage == 2) users[userIdx].kycStatus = 'advanced';
+                            users[userIdx].verified = true;
+                            fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+                        }
+                    } catch (e) {
+                        console.error('[admin kyc approve] failed to update users.json', e);
+                    }
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: 'KYC approved' }));
+            } catch (err) {
+                console.error('[admin kyc approve] Error:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: 'Server error' }));
+            }
+        });
+        return;
+    }
+
+    // ADMIN: reject KYC (POST) - /api/admin/kyc/reject
+    if (pathname === '/api/admin/kyc/reject' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                if (body && body.includes('}&')) body = body.substring(0, body.indexOf('}&') + 1);
+                const data = JSON.parse(body || '{}');
+                const { id, reviewer, reason } = data;
+                if (!id) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: 0, data: 'Missing id' })); return; }
+
+                const kycPath = path.join(__dirname, 'kyc_records.json');
+                let kyc = [];
+                if (fs.existsSync(kycPath)) {
+                    try { kyc = JSON.parse(fs.readFileSync(kycPath, 'utf8')) || []; } catch (e) { kyc = []; }
+                }
+
+                const idx = kyc.findIndex(r => r.id === id);
+                if (idx === -1) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: 0, data: 'KYC record not found' })); return; }
+
+                kyc[idx].status = 'rejected';
+                kyc[idx].reviewed_at = new Date().toISOString();
+                kyc[idx].reviewed_by = reviewer || 'admin';
+                kyc[idx].reject_reason = reason || null;
+                fs.writeFileSync(kycPath, JSON.stringify(kyc, null, 2));
+
+                // Optionally update users.json to reflect rejection
+                const usersPath = path.join(__dirname, 'users.json');
+                if (fs.existsSync(usersPath)) {
+                    try {
+                        const users = JSON.parse(fs.readFileSync(usersPath, 'utf8')) || [];
+                        const userIdx = users.findIndex(u => u.userid == kyc[idx].userid || u.uid == kyc[idx].userid);
+                        if (userIdx !== -1) {
+                            // Reset kycStatus so user can resubmit after rejection
+                            users[userIdx].kycStatus = 'none';
+                            users[userIdx].verified = false;
+                            fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+                        }
+                    } catch (e) {
+                        console.error('[admin kyc reject] failed to update users.json', e);
+                    }
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: 'KYC rejected' }));
+            } catch (err) {
+                console.error('[admin kyc reject] Error:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: 'Server error' }));
+            }
+        });
+        return;
+    }
+
     // Admin Withdrawal Approval - PUT or POST /api/admin/withdrawal/complete
     if (pathname === '/api/admin/withdrawal/complete' && (req.method === 'PUT' || req.method === 'POST')) {
         let body = '';
@@ -1163,12 +2032,10 @@ const server = http.createServer((req, res) => {
         req.on('data', chunk => { body += chunk; });
         req.on('end', () => {
             try {
-                let jsonBody = body;
-                if (body.includes('}&')) {
-                    jsonBody = body.substring(0, body.indexOf('}&') + 1);
-                }
-
-                const data = JSON.parse(jsonBody);
+                console.log('[trade-buy] Content-Type header:', req.headers['content-type']);
+                console.log('[trade-buy] Raw body snippet:', body && body.substring(0, 200));
+                const data = parseBodyString(body);
+                console.log('[trade-buy] Parsed body object:', data);
                 const { userid, username, fangxiang, miaoshu, biming, num, buyprice, zengjia, jianshao } = data;
 
                 if (!userid || !username || !biming || !num || !buyprice) {
@@ -1226,8 +2093,9 @@ const server = http.createServer((req, res) => {
         req.on('data', chunk => { body += chunk; });
         req.on('end', () => {
             try {
-                // Forward request to external API
-                const externalApiUrl = 'https://api.bvoxf.com/api/Trade/gettradlist';
+                // Forward request to external API (use canonical external 'gettradelist')
+                const externalApiUrl = 'https://api.bvoxf.com/api/Trade/gettradelist';
+                console.log('[gettradlist] Incoming body:', body);
                 const https = require('https');
                 const externalReq = https.request(externalApiUrl, {
                     method: 'POST',
@@ -1239,6 +2107,7 @@ const server = http.createServer((req, res) => {
                     let responseData = '';
                     externalRes.on('data', chunk => { responseData += chunk; });
                     externalRes.on('end', () => {
+                        console.log('[gettradlist] External response status:', externalRes.statusCode, 'length:', responseData.length);
                         res.writeHead(externalRes.statusCode, { 'Content-Type': 'application/json' });
                         res.end(responseData);
                     });
@@ -1261,14 +2130,15 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // Get coin data - proxy to external API
-    if (pathname === '/api/Trade/getcoin_data' && req.method === 'POST') {
+    // Alias old/traditional endpoint name that includes an 'e' -> /api/Trade/gettradelist
+    if (pathname === '/api/Trade/gettradelist' && req.method === 'POST') {
+        // Proxy behaviour is identical to /api/Trade/gettradlist
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', () => {
-            try {
-                // Forward request to external API
-                const externalApiUrl = 'https://api.bvoxf.com/api/Trade/getcoin_data';
+                try {
+                const externalApiUrl = 'https://api.bvoxf.com/api/Trade/gettradelist';
+                console.log('[gettradelist alias] Incoming body:', body);
                 const https = require('https');
                 const externalReq = https.request(externalApiUrl, {
                     method: 'POST',
@@ -1280,6 +2150,50 @@ const server = http.createServer((req, res) => {
                     let responseData = '';
                     externalRes.on('data', chunk => { responseData += chunk; });
                     externalRes.on('end', () => {
+                        console.log('[gettradelist alias] External response status:', externalRes.statusCode, 'length:', responseData.length);
+                        res.writeHead(externalRes.statusCode, { 'Content-Type': 'application/json' });
+                        res.end(responseData);
+                    });
+                });
+
+                externalReq.on('error', (err) => {
+                    console.error('[gettradelist alias] External API error:', err.message);
+                    res.writeHead(503, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: 'External API unavailable' }));
+                });
+
+                externalReq.write(body);
+                externalReq.end();
+            } catch (e) {
+                console.error('[gettradelist alias] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: e.message }));
+            }
+        });
+        return;
+    }
+
+    // Get coin data - proxy to external API
+    if (pathname === '/api/Trade/getcoin_data' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // Forward request to external API
+                const externalApiUrl = 'https://api.bvoxf.com/api/Trade/getcoin_data';
+                console.log('[getcoin_data] Incoming body:', body);
+                const https = require('https');
+                const externalReq = https.request(externalApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Content-Length': Buffer.byteLength(body)
+                    }
+                }, (externalRes) => {
+                    let responseData = '';
+                    externalRes.on('data', chunk => { responseData += chunk; });
+                    externalRes.on('end', () => {
+                        console.log('[getcoin_data] External response status:', externalRes.statusCode, 'length:', responseData.length);
                         res.writeHead(externalRes.statusCode, { 'Content-Type': 'application/json' });
                         res.end(responseData);
                     });
@@ -1396,7 +2310,7 @@ const server = http.createServer((req, res) => {
         req.on('data', chunk => { body += chunk; });
         req.on('end', () => {
             try {
-                const data = JSON.parse(body);
+                const data = parseBodyString(body);
                 const orderId = data.id;
 
                 // Get trade record from file
@@ -1431,7 +2345,7 @@ const server = http.createServer((req, res) => {
         req.on('data', chunk => { body += chunk; });
         req.on('end', () => {
             try {
-                const data = JSON.parse(body);
+                const data = parseBodyString(body);
                 const orderId = data.id;
                 const shuying = data.shuying; // 1 = win, 2 = loss
 
@@ -1466,7 +2380,7 @@ const server = http.createServer((req, res) => {
         req.on('data', chunk => { body += chunk; });
         req.on('end', () => {
             try {
-                const data = JSON.parse(body);
+                const data = parseBodyString(body);
                 const orderId = data.id;
 
                 // Get trade record from file
@@ -1701,6 +2615,327 @@ const server = http.createServer((req, res) => {
                     };
 
                     const alt = tryFindInFilesDirs();
+                    // KYC Stage 1: user identity submission - /User/setuserrz1
+                    if (pathname === '/User/setuserrz1' && req.method === 'POST') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk; });
+                        req.on('end', () => {
+                                try {
+                                    let data;
+                                    try {
+                                        let jsonBody = body;
+                                        if (body && body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                                        data = JSON.parse(jsonBody || '{}');
+                                    } catch (parseErr) {
+                                        // Fallback for form-encoded bodies
+                                        data = {};
+                                        const params = new URLSearchParams(body);
+                                        for (const [k, v] of params.entries()) data[k] = v;
+                                    }
+                                    const { userid, username, name, type, idnum, zpqian, zphou } = data;
+                                if (!userid || !username || !name || !type || !idnum || !zpqian || !zphou) {
+                                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                                    res.end(JSON.stringify({ code: 0, info: 'Missing parameters' }));
+                                    return;
+                                }
+
+                                const kycPath = path.join(__dirname, 'kyc_records.json');
+                                let kyc = [];
+                                if (fs.existsSync(kycPath)) {
+                                    try { kyc = JSON.parse(fs.readFileSync(kycPath, 'utf8')) || []; } catch (e) { kyc = []; }
+                                }
+
+                                const record = {
+                                    id: uuidv4(),
+                                    userid,
+                                    username,
+                                    stage: 1,
+                                    status: 'pending',
+                                    data: { name, type, idnum, zpqian, zphou },
+                                    submitted_at: new Date().toISOString(),
+                                    reviewed_at: null,
+                                    reviewed_by: null
+                                };
+
+                                kyc.push(record);
+                                fs.writeFileSync(kycPath, JSON.stringify(kyc, null, 2));
+
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 1, info: 'KYC stage 1 submitted', data: record }));
+                            } catch (err) {
+                                console.error('[User setuserrz1] Error:', err);
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 0, info: 'Server error' }));
+                            }
+                        });
+                        return;
+                    }
+
+                    // KYC Stage 2: address proof submission - /User/setuserrz2
+                    if (pathname === '/User/setuserrz2' && req.method === 'POST') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk; });
+                        req.on('end', () => {
+                                try {
+                                    let data;
+                                    try {
+                                        let jsonBody = body;
+                                        if (body && body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                                        data = JSON.parse(jsonBody || '{}');
+                                    } catch (parseErr) {
+                                        data = {};
+                                        const params = new URLSearchParams(body);
+                                        for (const [k, v] of params.entries()) data[k] = v;
+                                    }
+                                    const { userid, username, zphou } = data;
+                                if (!userid || !username || !zphou) {
+                                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                                    res.end(JSON.stringify({ code: 0, info: 'Missing parameters' }));
+                                    return;
+                                }
+
+                                const kycPath = path.join(__dirname, 'kyc_records.json');
+                                let kyc = [];
+                                if (fs.existsSync(kycPath)) {
+                                    try { kyc = JSON.parse(fs.readFileSync(kycPath, 'utf8')) || []; } catch (e) { kyc = []; }
+                                }
+
+                                const record = {
+                                    id: uuidv4(),
+                                    userid,
+                                    username,
+                                    stage: 2,
+                                    status: 'pending',
+                                    data: { zphou },
+                                    submitted_at: new Date().toISOString(),
+                                    reviewed_at: null,
+                                    reviewed_by: null
+                                };
+
+                                kyc.push(record);
+                                fs.writeFileSync(kycPath, JSON.stringify(kyc, null, 2));
+
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 1, info: 'KYC stage 2 submitted', data: record }));
+                            } catch (err) {
+                                console.error('[User setuserrz2] Error:', err);
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 0, info: 'Server error' }));
+                            }
+                        });
+                        return;
+                    }
+                    // API-prefixed handlers so frontend using `apiurl = .../api` works
+                    if (pathname === '/api/User/setuserrz1' && req.method === 'POST') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk; });
+                        req.on('end', () => {
+                            try {
+                                let data;
+                                try {
+                                    let jsonBody = body;
+                                    if (body && body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                                    data = JSON.parse(jsonBody || '{}');
+                                } catch (parseErr) {
+                                    data = {};
+                                    const params = new URLSearchParams(body);
+                                    for (const [k, v] of params.entries()) data[k] = v;
+                                }
+                                const { userid, username, name, type, idnum, zpqian, zphou } = data;
+                                if (!userid || !username || !name || !type || !idnum || !zpqian || !zphou) {
+                                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                                    res.end(JSON.stringify({ code: 0, info: 'Missing parameters' }));
+                                    return;
+                                }
+
+                                const kycPath = path.join(__dirname, 'kyc_records.json');
+                                let kyc = [];
+                                if (fs.existsSync(kycPath)) {
+                                    try { kyc = JSON.parse(fs.readFileSync(kycPath, 'utf8')) || []; } catch (e) { kyc = []; }
+                                }
+
+                                const record = {
+                                    id: uuidv4(), userid, username, stage: 1, status: 'pending',
+                                    data: { name, type, idnum, zpqian, zphou },
+                                    submitted_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null
+                                };
+
+                                kyc.push(record);
+                                fs.writeFileSync(kycPath, JSON.stringify(kyc, null, 2));
+
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 1, info: 'KYC stage 1 submitted', data: record }));
+                            } catch (err) {
+                                console.error('[api User setuserrz1] Error:', err);
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 0, info: 'Server error' }));
+                            }
+                        });
+                        return;
+                    }
+
+                    if (pathname === '/api/User/setuserrz2' && req.method === 'POST') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk; });
+                        req.on('end', () => {
+                            try {
+                                let data;
+                                try {
+                                    let jsonBody = body;
+                                    if (body && body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                                    data = JSON.parse(jsonBody || '{}');
+                                } catch (parseErr) {
+                                    data = {};
+                                    const params = new URLSearchParams(body);
+                                    for (const [k, v] of params.entries()) data[k] = v;
+                                }
+                                const { userid, username, zphou } = data;
+                                if (!userid || !username || !zphou) {
+                                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                                    res.end(JSON.stringify({ code: 0, info: 'Missing parameters' }));
+                                    return;
+                                }
+
+                                const kycPath = path.join(__dirname, 'kyc_records.json');
+                                let kyc = [];
+                                if (fs.existsSync(kycPath)) {
+                                    try { kyc = JSON.parse(fs.readFileSync(kycPath, 'utf8')) || []; } catch (e) { kyc = []; }
+                                }
+
+                                const record = {
+                                    id: uuidv4(), userid, username, stage: 2, status: 'pending',
+                                    data: { zphou }, submitted_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null
+                                };
+
+                                kyc.push(record);
+                                fs.writeFileSync(kycPath, JSON.stringify(kyc, null, 2));
+
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 1, info: 'KYC stage 2 submitted', data: record }));
+                            } catch (err) {
+                                console.error('[api User setuserrz2] Error:', err);
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 0, info: 'Server error' }));
+                            }
+                        });
+                        return;
+                    }
+
+                    // KYC status check - returns numeric status expected by frontend
+                    if (pathname === '/api/User/getrzzt1' && req.method === 'POST') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk; });
+                        req.on('end', () => {
+                                try {
+                                    let data;
+                                    try {
+                                        let jsonBody = body;
+                                        if (body && body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                                        data = JSON.parse(jsonBody || '{}');
+                                    } catch (parseErr) {
+                                        data = {};
+                                        const params = new URLSearchParams(body);
+                                        for (const [k, v] of params.entries()) data[k] = v;
+                                    }
+                                    const { userid } = data;
+                                if (!userid) {
+                                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                                    res.end(JSON.stringify({ code: 0, info: 'Missing userid' }));
+                                    return;
+                                }
+
+                                const kycPath = path.join(__dirname, 'kyc_records.json');
+                                let kyc = [];
+                                if (fs.existsSync(kycPath)) {
+                                    try { kyc = JSON.parse(fs.readFileSync(kycPath, 'utf8')) || []; } catch (e) { kyc = []; }
+                                }
+
+                                // find latest stage1 and stage2 for this user
+                                const userRecords = kyc.filter(r => r.userid == userid);
+                                const stage1 = userRecords.filter(r => r.stage == 1).sort((a,b)=> new Date(b.submitted_at)-new Date(a.submitted_at))[0];
+                                const stage2 = userRecords.filter(r => r.stage == 2).sort((a,b)=> new Date(b.submitted_at)-new Date(a.submitted_at))[0];
+
+                                let status = 0; // default: not applied
+                                if (!stage1) status = 0;
+                                else if (stage1.status === 'pending') status = 1;
+                                else if (stage1.status === 'rejected') status = 3;
+                                else if (stage1.status === 'approved') {
+                                    if (!stage2) status = 2;
+                                    else if (stage2.status === 'pending') status = 4;
+                                    else if (stage2.status === 'approved') status = 5;
+                                    else if (stage2.status === 'rejected') status = 6;
+                                }
+
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 1, data: status }));
+                            } catch (err) {
+                                console.error('[api User getrzzt1] Error:', err);
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 0, info: 'Server error' }));
+                            }
+                        });
+                        return;
+                    }
+
+                    // KYC status check for advanced page - returns object expected by kyc2.html
+                    if (pathname === '/api/User/getrzzt2' && req.method === 'POST') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk; });
+                        req.on('end', () => {
+                            try {
+                                let data;
+                                try {
+                                    let jsonBody = body;
+                                    if (body && body.includes('}&')) jsonBody = body.substring(0, body.indexOf('}&') + 1);
+                                    data = JSON.parse(jsonBody || '{}');
+                                } catch (parseErr) {
+                                    data = {};
+                                    const params = new URLSearchParams(body);
+                                    for (const [k, v] of params.entries()) data[k] = v;
+                                }
+
+                                const { userid } = data;
+                                if (!userid) {
+                                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                                    res.end(JSON.stringify({ code: 0, info: 'Missing userid' }));
+                                    return;
+                                }
+
+                                const kycPath = path.join(__dirname, 'kyc_records.json');
+                                let kyc = [];
+                                if (fs.existsSync(kycPath)) {
+                                    try { kyc = JSON.parse(fs.readFileSync(kycPath, 'utf8')) || []; } catch (e) { kyc = []; }
+                                }
+
+                                // find latest stage1 and stage2 for this user
+                                const userRecords = kyc.filter(r => r.userid == userid);
+                                const stage1 = userRecords.filter(r => r.stage == 1).sort((a,b)=> new Date(b.submitted_at)-new Date(a.submitted_at))[0];
+                                const stage2 = userRecords.filter(r => r.stage == 2).sort((a,b)=> new Date(b.submitted_at)-new Date(a.submitted_at))[0];
+
+                                // renzhengzhuangtai: 0 = primary not completed/approved, 1 = primary approved
+                                const renzhengzhuangtai = (stage1 && stage1.status === 'approved') ? 1 : 0;
+
+                                let status = 0; // default: not applied / no stage1
+                                if (!stage1) status = 0;
+                                else if (stage1.status === 'pending') status = 1;
+                                else if (stage1.status === 'rejected') status = 3;
+                                else if (stage1.status === 'approved') {
+                                    if (!stage2) status = 2;
+                                    else if (stage2.status === 'pending') status = 4;
+                                    else if (stage2.status === 'approved') status = 5;
+                                    else if (stage2.status === 'rejected') status = 6;
+                                }
+
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 1, data: { renzhengzhuangtai: renzhengzhuangtai, sfsqrz: status } }));
+                            } catch (err) {
+                                console.error('[api User getrzzt2] Error:', err);
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 0, info: 'Server error' }));
+                            }
+                        });
+                        return;
+                    }
                     if (alt) {
                         const ext = path.extname(alt).toLowerCase();
                         const contentType = mimeTypes[ext] || 'application/octet-stream';

@@ -334,7 +334,7 @@
                     $('#shangtu').attr('src','/img/coin/'+xuanze.toLowerCase()+'.png');
                     $('#shangming').text(xuanze.toUpperCase());
                     $('#y-bim').text(xuanze.toUpperCase());
-                    $('#y-yue').text(dqyue[xuanze]);
+                    $('#y-yue').text(Number(dqyue[xuanze] || 0).toFixed(xsw[xuanze.toLowerCase()]));
                     $('#y-extnum').val(null);
 
 

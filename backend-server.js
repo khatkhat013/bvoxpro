@@ -13,6 +13,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const ethers = require('ethers');
 const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
 
 // Load environment variables
 dotenv.config();
@@ -20,8 +22,59 @@ dotenv.config();
 const app = express();
 const PORT = process.env.BACKEND_PORT || 5000;
 
-// Middleware
-app.use(cors());
+// ========== JSON FILE UTILITIES ==========
+
+const usersFile = path.join(__dirname, 'users.json');
+
+function readUsersFile() {
+    try {
+        const data = fs.readFileSync(usersFile, 'utf8');
+        return JSON.parse(data) || [];
+    } catch (error) {
+        console.error('Error reading users.json:', error);
+        return [];
+    }
+}
+
+function writeUsersFile(data) {
+    try {
+        fs.writeFileSync(usersFile, JSON.stringify(data, null, 2), 'utf8');
+        return true;
+    } catch (error) {
+        console.error('Error writing users.json:', error);
+        return false;
+    }
+}
+
+function getUserByUserId(userid) {
+    const users = readUsersFile();
+    return users.find(u => u.userid == userid);
+}
+
+function updateUserBalance(userid, coin, newBalance) {
+    const users = readUsersFile();
+    const userIndex = users.findIndex(u => u.userid == userid);
+    
+    if (userIndex !== -1) {
+        if (!users[userIndex].balances) {
+            users[userIndex].balances = {};
+        }
+        users[userIndex].balances[coin.toLowerCase()] = newBalance;
+        writeUsersFile(users);
+        return true;
+    }
+    return false;
+}
+
+// Middleware - CORS configuration for development
+const corsOptions = {
+    origin: ['http://localhost:3000', 'http://localhost:5000', 'http://127.0.0.1:3000', 'http://127.0.0.1:5000'],
+    credentials: false,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // ========== DATABASE SETUP ==========
@@ -152,6 +205,58 @@ const deviceSessionSchema = new mongoose.Schema({
 deviceSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const DeviceSession = mongoose.model('DeviceSession', deviceSessionSchema);
+
+// Mining Schema - Track ETH staking orders
+const miningSchema = new mongoose.Schema({
+    userId: {
+        type: String,
+        required: true,
+        index: true,
+    },
+    username: String,
+    stakedAmount: {
+        type: Number,
+        required: true,
+    },
+    currency: {
+        type: String,
+        default: 'ETH',
+    },
+    dailyYield: {
+        type: Number,
+        required: true,
+    },
+    totalIncome: {
+        type: Number,
+        default: 0,
+    },
+    todayIncome: {
+        type: Number,
+        default: 0,
+    },
+    status: {
+        type: String,
+        enum: ['pending', 'active', 'completed', 'redeemed'],
+        default: 'pending',
+    },
+    startDate: {
+        type: Date,
+        default: Date.now,
+    },
+    activationDate: Date,
+    redemptionDate: Date,
+    lastIncomeAt: Date,
+    createdAt: {
+        type: Date,
+        default: Date.now,
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now,
+    },
+});
+
+const Mining = mongoose.model('Mining', miningSchema);
 
 // ========== AUTHENTICATION ==========
 
@@ -659,6 +764,279 @@ app.get('/wallet/user/:userId/devices', async (req, res) => {
         res.json({
             code: 0,
             message: 'Failed to get user devices',
+        });
+    }
+});
+
+/**
+ * POST /api/Mine/getminesy
+ * Get mining stats for user (total income, today income, staked amount)
+ */
+app.post('/api/Mine/getminesy', async (req, res) => {
+    try {
+        const { userid, username } = req.body;
+
+        if (!userid) {
+            return res.json({
+                code: 0,
+                data: 'User ID is required',
+            });
+        }
+
+        // Get all active mining records for this user
+        const miningRecords = await Mining.find({
+            userId: userid,
+            status: { $in: ['pending', 'active'] }
+        });
+
+        if (!miningRecords || miningRecords.length === 0) {
+            return res.json({
+                code: 1,
+                data: {
+                    total_shuliang: 0,
+                    total_jine: 0,
+                    recent_jine: 0,
+                },
+            });
+        }
+
+        // Calculate total staked amount
+        const total_shuliang = miningRecords.reduce((sum, record) => sum + record.stakedAmount, 0);
+        
+        // Calculate total income
+        const total_jine = miningRecords.reduce((sum, record) => sum + (record.totalIncome || 0), 0);
+        
+        // Calculate today's income
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const recent_jine = miningRecords.reduce((sum, record) => {
+            if (record.lastIncomeAt && new Date(record.lastIncomeAt) >= today) {
+                return sum + (record.todayIncome || 0);
+            }
+            return sum;
+        }, 0);
+
+        res.json({
+            code: 1,
+            data: {
+                total_shuliang: total_shuliang,
+                total_jine: total_jine,
+                recent_jine: recent_jine,
+            },
+        });
+    } catch (error) {
+        console.error('Error getting mining stats:', error);
+        res.json({
+            code: 0,
+            data: 'Failed to get mining statistics',
+        });
+    }
+});
+
+/**
+ * POST /api/Mine/setmineorder
+ * Create new mining order (staking ETH) with balance deduction and auto-rewards
+ */
+app.post('/api/Mine/setmineorder', async (req, res) => {
+    try {
+        const { userid, username, jine } = req.body;
+
+        // Validate input
+        if (!userid || !jine || isNaN(jine)) {
+            return res.json({
+                code: 0,
+                data: 'Invalid input parameters',
+            });
+        }
+
+        const amount = parseFloat(jine);
+
+        // Validate staking amount
+        if (amount <= 0) {
+            return res.json({
+                code: 0,
+                data: 'Staking amount must be greater than 0',
+            });
+        }
+
+        // Get user from JSON file to check balance
+        const user = getUserByUserId(userid);
+        if (!user) {
+            return res.json({
+                code: 0,
+                data: 'User not found',
+            });
+        }
+
+        const currentBalance = user.balances?.eth || 0;
+
+        // Check if user has sufficient ETH balance
+        if (currentBalance < amount) {
+            return res.json({
+                code: 0,
+                data: `Insufficient ETH balance. Current: ${currentBalance} ETH, Required: ${amount} ETH`,
+            });
+        }
+
+        // Determine daily yield percentage based on amount
+        let dailyYield = 0;
+        if (amount >= 0.5 && amount < 2.0) {
+            dailyYield = 0.003; // 0.3%
+        } else if (amount >= 2.0 && amount < 12.0) {
+            dailyYield = 0.004; // 0.4%
+        } else if (amount >= 12.0 && amount < 20.0) {
+            dailyYield = 0.0045; // 0.45%
+        } else if (amount >= 20.0 && amount < 40.0) {
+            dailyYield = 0.005; // 0.5%
+        } else if (amount >= 40.0) {
+            dailyYield = 0.006; // 0.6%
+        } else {
+            return res.json({
+                code: 0,
+                data: 'Staking amount must be at least 0.5 ETH',
+            });
+        }
+
+        // Deduct staked amount from user's ETH balance
+        const newBalance = currentBalance - amount;
+        updateUserBalance(userid, 'eth', newBalance);
+
+        // Create new mining record in MongoDB
+        const miningOrder = await Mining.create({
+            userId: userid,
+            username: username || user.username || `User_${userid}`,
+            stakedAmount: amount,
+            currency: 'ETH',
+            dailyYield: dailyYield,
+            totalIncome: 0,
+            todayIncome: 0,
+            status: 'active', // Immediately active
+            startDate: new Date(),
+            activationDate: new Date(),
+        });
+
+        console.log('✓ Mining order created:', {
+            userId: userid,
+            amount: amount,
+            dailyYield: (dailyYield * 100) + '%',
+            orderId: miningOrder._id,
+            newBalance: newBalance,
+        });
+
+        // Schedule automatic daily rewards for 24 hours
+        scheduleRewards(userid, amount, dailyYield, miningOrder._id);
+
+        res.json({
+            code: 1,
+            data: {
+                orderId: miningOrder._id,
+                amount: miningOrder.stakedAmount,
+                currency: miningOrder.currency,
+                dailyYield: (miningOrder.dailyYield * 100) + '%',
+                status: miningOrder.status,
+                newBalance: newBalance,
+                message: 'Mining started successfully. Daily rewards will be added automatically.',
+            },
+        });
+    } catch (error) {
+        console.error('Error creating mining order:', error);
+        res.json({
+            code: 0,
+            data: 'Failed to create mining order: ' + error.message,
+        });
+    }
+});
+
+/**
+ * Schedule automatic daily rewards for mining
+ * Adds reward to user's ETH balance every 24 hours
+ */
+function scheduleRewards(userid, stakedAmount, dailyYield, orderId) {
+    const dailyReward = stakedAmount * dailyYield;
+    
+    // Calculate next payout time (24 hours from now)
+    const nextPayout = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    
+    console.log(`⏱️ Scheduling rewards for user ${userid}:`, {
+        stakedAmount: stakedAmount,
+        dailyYield: (dailyYield * 100) + '%',
+        dailyReward: dailyReward.toFixed(8) + ' ETH',
+        nextPayout: nextPayout,
+    });
+
+    // Set interval to add rewards every 24 hours
+    const rewardInterval = setInterval(async () => {
+        try {
+            // Get current user data
+            const user = getUserByUserId(userid);
+            if (!user) {
+                console.log(`⚠️ User ${userid} not found, stopping rewards`);
+                clearInterval(rewardInterval);
+                return;
+            }
+
+            // Check if mining order is still active
+            const mining = await Mining.findById(orderId);
+            if (!mining || mining.status !== 'active') {
+                console.log(`⚠️ Mining order ${orderId} no longer active, stopping rewards`);
+                clearInterval(rewardInterval);
+                return;
+            }
+
+            // Add daily reward to user's ETH balance
+            const currentBalance = user.balances?.eth || 0;
+            const newBalance = currentBalance + dailyReward;
+            
+            updateUserBalance(userid, 'eth', newBalance);
+
+            // Update mining record
+            mining.totalIncome = (mining.totalIncome || 0) + dailyReward;
+            mining.todayIncome = dailyReward;
+            mining.lastIncomeAt = new Date();
+            await mining.save();
+
+            console.log(`✅ Reward added for user ${userid}:`, {
+                dailyReward: dailyReward.toFixed(8) + ' ETH',
+                newBalance: newBalance.toFixed(8) + ' ETH',
+                totalIncome: mining.totalIncome.toFixed(8) + ' ETH',
+                timestamp: new Date(),
+            });
+        } catch (error) {
+            console.error(`Error adding reward for user ${userid}:`, error);
+        }
+    }, 24 * 60 * 60 * 1000); // Every 24 hours
+}
+
+/**
+ * GET /api/Mine/records/:userid
+ * Get all mining records for a user
+ */
+app.get('/api/Mine/records/:userid', async (req, res) => {
+    try {
+        const { userid } = req.params;
+
+        const records = await Mining.find({ userId: userid }).sort({ createdAt: -1 });
+
+        res.json({
+            code: 1,
+            data: records.map(record => ({
+                orderId: record._id,
+                amount: record.stakedAmount,
+                currency: record.currency,
+                dailyYield: (record.dailyYield * 100) + '%',
+                totalIncome: record.totalIncome,
+                todayIncome: record.todayIncome,
+                status: record.status,
+                startDate: record.startDate,
+                activationDate: record.activationDate,
+            })),
+        });
+    } catch (error) {
+        console.error('Error getting mining records:', error);
+        res.json({
+            code: 0,
+            data: 'Failed to get mining records',
         });
     }
 });

@@ -263,6 +263,8 @@ input, textarea, button, select {
     border-radius: 1rem;
     overflow: hidden;
     margin-top: 9rem;
+    padding-bottom: 0; /* avoid extra space below chart */
+    overflow: visible; /* ensure rounded corners show without clipping */
 }
 
 .yc-header{

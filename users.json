@@ -7,12 +7,14 @@
     "balances": {
       "usdt": 43000,
       "btc": 2,
-      "eth": 40,
+      "eth": 6,
       "usdc": 5001,
       "pyusd": 3000,
       "sol": 1008
     },
-    "status": "active"
+    "status": "active",
+    "kycStatus": "basic",
+    "verified": false
   },
   {
     "userid": "37283",

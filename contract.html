@@ -15,7 +15,7 @@
                 background: linear-gradient(to bottom, #2b5279 5%, #6485a4 60%);
             }
 			body{
-				background: url(./contract_files/leaf-bg.png);
+				background: url(/img/leaf-bg.png);
 				background-size: 180vw;
 				background-position-x: -80vw;
 				background-repeat: no-repeat;
@@ -75,13 +75,13 @@
 		</div>
         
 		<div class="y-kline">
-			<iframe 
+			<iframe
 				id="kline-iframe"
-				src="https://www.bvoxf.com/views/contract/kline.html?market=btcusdt" 
-				width="100%" 
-				height="400" 
-				frameborder="0" 
-				style="border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);"
+				width="100%"
+				height="calc(100vh - 380px)"
+				frameborder="0"
+				scrolling="no"
+				style="display:block; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); height: calc(100vh - 380px) !important; overflow: hidden; margin-bottom: -8px;"
 				allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
 			</iframe>
 		</div>
@@ -475,12 +475,13 @@
 		};
 
 		var urlParams = new URLSearchParams(window.location.search);
-		var coinname = urlParams.get('market');
+			var coinname = urlParams.get('market');
+			var trade_list_timer; // token for tradelist interval
 		
 		function gettradlist(){
 			
 
-			$.post(apiurl + "/Trade/gettradelist",{
+			$.post(apiurl + "/Trade/gettradlist",{
 				'coinname':coinname
 			},function(data){
 				if(data.code == 1){
@@ -517,17 +518,17 @@
 			$.post(apiurl + "/Trade/getcoin_data",{
 				'coinname':coinname
 			},function(data){
-				if(data.code == 1){
-					$('#y-24').text(data.data.amount);
-					$('#y-dqbj').text(Number(data.data.close).toFixed(xsw[coinname]));
-					$('#y-dqjg').text(Number(data.data.close).toFixed(xsw[coinname]));
-				}
+						if(data.code == 1 && data.data && data.data.close != null){
+							$('#y-24').text(data.data.amount);
+							$('#y-dqbj').text(Number(data.data.close).toFixed(xsw[coinname]));
+							$('#y-dqjg').text(Number(data.data.close).toFixed(xsw[coinname]));
+						}
 			});
 		}
 
 		let coin_data;
 		$(document).ready(function() {
-			// Use local contract_files for coin images
+				// Use local contract_files for coin images
 			$('#y-coinimg').attr('src','./contract_files/'+coinname+'.png');
 			$('#y-xiazhubm').attr('src','./contract_files/'+coinname+'.png');
 			$('.y-xdan-tl-txt-top').text(coinname.toLocaleUpperCase());
@@ -535,9 +536,9 @@
 			// $('#iframeid').attr('src','kline.html?market='+coinname+'usdt'); // Not used anymore
 			gettradlist();
 			getcoin_data();
-          	setTimestampInterval("gettradlist()",3000);
-			coin_data = setTimestampInterval("getcoin_data()",2000);
-
+						trade_list_timer = setTimestampInterval(gettradlist,3000);
+						coin_data = setTimestampInterval(getcoin_data,2000);
+            
 			$("#y-xia").click(function() {
 			    $('#y-buynum').attr('placeholder', gy('请输入数量'));
 				$("#y-xdan").slideToggle(50);
@@ -867,12 +868,12 @@
 				clearTimestampInterval(orderst);
 				$('#y-dqbj').text(currentValue.toFixed(xsw[coinname]));
 				$('#y-dqjg').text(currentValue.toFixed(xsw[coinname]));
-				coin_data = setTimestampInterval("getcoin_data()",2000);
+				coin_data = setTimestampInterval(getcoin_data,2000);
 
 				$('#y-now').text(gy('最终结果'));
 				$('#y-zzjg').css('display', 'block');
 
-				orderjs = setTimestampInterval("getorderjs()",1000);
+				orderjs = setTimestampInterval(getorderjs,1000);
 				return;
 			}
 
@@ -982,9 +983,11 @@
 		// Update iframe source based on market parameter
 		function updateKlineIframe() {
 			const urlParams = new URLSearchParams(window.location.search);
-			const coinname = urlParams.get('market') || 'btc';
+			const marketParam = urlParams.get('market') || 'btc';
+			// Update global coinname for other functions
+			coinname = marketParam;
 			const klineIframe = document.getElementById('kline-iframe');
-			
+            
 			if (klineIframe) {
 				const marketSymbol = coinname + 'usdt';
 				const iframeUrl = `https://www.bvoxf.com/views/contract/kline.html?market=${marketSymbol}`;
@@ -1005,7 +1008,61 @@
 		$('#y-zhe3').click(function(){
 			$('.y-czxz-co').hide();
 			$('#y-zhe3').hide();
-		});
+			});
+
+			// Handle dynamic coin selection without page reload
+			$('a.y-wa-box').click(function(e){
+				e.preventDefault();
+				var href = $(this).attr('href') || '';
+				var selected = null;
+				var qIndex = href.indexOf('?');
+				if(qIndex > -1){
+					var params = new URLSearchParams(href.substring(qIndex + 1));
+					selected = params.get('market');
+				}
+				if(selected){
+					selectCoin(selected);
+				}
+			});
+            
+
+		function selectCoin(selected){
+			// Normalize selected coin (strip trailing 'usdt' if present and lower-case)
+			if(typeof selected === 'string'){
+				selected = selected.toLowerCase().replace(/usdt$/i, '');
+			}
+			// stop existing timers if any
+			try{ if(trade_list_timer) clearTimestampInterval(trade_list_timer); }catch(e){}
+			try{ if(coin_data) clearTimestampInterval(coin_data); }catch(e){}
+
+			coinname = selected;
+			// Update UI elements
+			$('#y-coinimg').attr('src','./contract_files/'+coinname+'.png');
+			$('#y-xiazhubm').attr('src','./contract_files/'+coinname+'.png');
+			$('.y-xdan-tl-txt-top').text(coinname.toLocaleUpperCase());
+			$('#y-coinming').text(coinname.toLocaleUpperCase());
+
+			// Update URL (history) so page reflects selection
+			try{ history.pushState(null, null, '?market='+coinname); } catch(e){}
+
+			// Update iframe
+			const klineIframe = document.getElementById('kline-iframe');
+			if(klineIframe){
+				const marketSymbol = coinname + 'usdt';
+				const iframeUrl = `https://www.bvoxf.com/views/contract/kline.html?market=${marketSymbol}`;
+				klineIframe.src = iframeUrl;
+			}
+
+			// Refresh data & restart timers
+			gettradlist();
+			getcoin_data();
+			trade_list_timer = setTimestampInterval(gettradlist,3000);
+			coin_data = setTimestampInterval(getcoin_data,2000);
+
+			// Close select modal
+			$('.y-czxz-co').hide();
+			$('#y-zhe3').hide();
+		}
 		
 		function shuaxin(){
 		    location.reload();
