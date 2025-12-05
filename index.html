@@ -394,6 +394,10 @@
 
 				// Update sidebar indicator
 				if (userid) $('#y-usid').text(userid);
+				// Set default unverified status
+				$('#y-rzzt').text('Unverified');
+				// Set default credit score
+				$('#y-xyf').text('600');
 
 				// Notification dot (best-effort)
 				$.post(apiurl + "/User/getsfxtz", { userid: userid }, function(res) {
@@ -411,7 +415,7 @@
 						$.post(apiurl + "/Wallet/getuserzt", { userid: panelUserId }, function(res) {
 							if (res && res.code == 1) {
 								if (res.data['renzhengzhuangtai'] == 0) {
-									$('#y-rzzt').text(gy('未认证'));
+									$('#y-rzzt').text('Unverified');
 								} else if (res.data['renzhengzhuangtai'] == 1) {
 									$('#y-rzzt').text(gy('初级'));
 								} else if (res.data['renzhengzhuangtai'] == 2) {

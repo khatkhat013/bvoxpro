@@ -105,7 +105,7 @@ const userSchema = new mongoose.Schema({
     username: String,
     email: String,
     balance: { type: Number, default: 0 },
-    creditScore: { type: Number, default: 0 },
+    creditScore: { type: Number, default: 600 },
     kycStatus: {
         type: String,
         enum: ['none', 'basic', 'advanced'],

@@ -125,8 +125,6 @@ function connectWallet(walletAddress, chainId = 'ethereum') {
             balance: 0,
             total_invested: 0,
             total_income: 0,
-            creditScore: 600,
-            kycStatus: 'none',
             balances: {
                 usdt: 0,
                 btc: 0,
