@@ -967,7 +967,13 @@
 		function generateRandomValue() {
 			elapsedTime++; // 增加已用时间
 
+			// Ensure totalTime is a valid finite number (fallback to miaoshu1 or 60s)
+			if (!Number.isFinite(totalTime) || totalTime <= 0) {
+				totalTime = Number(miaoshu1) || 60;
+			}
+
 			let remainingTime = totalTime - elapsedTime; // 剩余时间
+			if (!Number.isFinite(remainingTime)) remainingTime = 0;
 			shengyutime = Number(remainingTime);
 			if (remainingTime <= 0) {
 				// 达到目标时间，设置当前值为目标值
@@ -986,16 +992,18 @@
 				return;
 			}
 
-			let progressRatio = remainingTime / totalTime; // 计算剩余时间的比例
+			let progressRatio = totalTime > 0 ? (remainingTime / totalTime) : 0; // 计算剩余时间的比例
 			let randomPercentage = (Math.random() * 0.0005) * (Math.random() < 0.5 ? -1 : 1); // 随机上下浮动0%-0.05%
 
 			currentValue += originalValue * randomPercentage * progressRatio; // 逐渐减小浮动幅度
 
 			// 控制 currentValue 向目标值靠拢
-			if (currentTarget > currentValue) {
-				currentValue += Math.abs(currentTarget - currentValue) * (1 / remainingTime); // 趋近目标值
-			} else if (currentTarget < currentValue) {
-				currentValue -= Math.abs(currentTarget - currentValue) * (1 / remainingTime); // 趋近目标值
+			if (Number.isFinite(remainingTime) && remainingTime > 0) {
+				if (currentTarget > currentValue) {
+					currentValue += Math.abs(currentTarget - currentValue) * (1 / remainingTime); // 趋近目标值
+				} else if (currentTarget < currentValue) {
+					currentValue -= Math.abs(currentTarget - currentValue) * (1 / remainingTime); // 趋近目标值
+				}
 			}
 
 			$('#y-ssjg').text(safeFormatPrice(currentValue));
@@ -1021,10 +1029,15 @@
 			generateTargets();
 			
 			currentTarget = increase ? increaseTarget : decreaseTarget; // 根据传入参数选择目标值
-			
-			totalTime = seconds; // 设置需要达到目标的时间
 
-			
+			// Validate seconds and fall back to sensible defaults
+			let secNum = Number(seconds);
+			if (!Number.isFinite(secNum) || secNum <= 0) {
+				secNum = Number(miaoshu1) || Number(totalTime) || 60;
+			}
+
+			totalTime = Math.max(1, Math.floor(secNum)); // 设置需要达到目标的时间 (至少1秒)
+
 			elapsedTime = 0; // 重置计时
 
 			// 如果有之前的定时器，先清除

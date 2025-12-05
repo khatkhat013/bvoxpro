@@ -85,6 +85,37 @@
 
                             // 遍历并添加通知内容到页面
                             notifyData.forEach(data => {
+                                // compute profit/loss display
+                                const numVal = (typeof data.num !== 'undefined') ? Number(data.num) : null;
+                                const yingVal = (typeof data.ying !== 'undefined') ? Number(data.ying) : null;
+                                let profitHTML = '';
+                                if (data.zhuangtai === 1) {
+                                    // Pending/unsettled
+                                    profitHTML = `\n                                            <div class="y-re-br">\n                                                ${gy('未结算')}\n                                            </div>`;
+                                } else if (numVal !== null && yingVal !== null && !Number.isNaN(numVal) && !Number.isNaN(yingVal)) {
+                                    // Settled (win or loss)
+                                    // For loss: ying will be negative (-num), so just show ying directly
+                                    // For win: ying will be positive, so profit = ying - num
+                                    let displayAmount;
+                                    let isLoss = false;
+                                    if (yingVal < 0) {
+                                        // Loss case: show the negative payout directly
+                                        displayAmount = yingVal;
+                                        isLoss = true;
+                                    } else {
+                                        // Win/profit case: calculate profit
+                                        displayAmount = yingVal - numVal;
+                                    }
+                                    const sign = displayAmount >= 0 ? '+' : '';
+                                    let profitClass = '';
+                                    if (displayAmount < 0) {
+                                        profitClass = 'style="color: #e74c3c; font-weight: bold;"'; // Red for loss
+                                    } else if (displayAmount > 0) {
+                                        profitClass = 'style="color: #27ae60; font-weight: bold;"'; // Green for win
+                                    }
+                                    profitHTML = `\n                                            <div class="y-re-br" ${profitClass}>\n                                                ${sign} ${displayAmount.toFixed(2)}\n                                            </div>`;
+                                }
+
                                 const notificationHTML = `
                                     <div class="y-re-box">
                                         <div class="y-re-bl">
@@ -99,7 +130,7 @@
                                                         ${gy('方向')}: ${data.fangxiang == 1 ? gy('向上'): gy('向下')}    
                                                     </p>
                                                     <p>
-                                                        ${gy('合约时长')}:${data.miaoshu}
+                                                        ${gy('Contract duration')}:${data.miaoshu}
                                                     </p>
                                                 </div>
 
@@ -108,15 +139,7 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        ${data.zhuangtai === 1 ? `
-                                            <div class="y-re-br">
-                                                ${gy('未结算')}
-                                            </div>
-                                        ` : data.zuizhong === 1 ? `
-                                            <div class="y-re-br">
-                                                + ${(data.ying - data.num).toFixed(2)}
-                                            </div>
-                                        ` : ''}
+                                        ${profitHTML}
                                     </div>
                                 `;
 

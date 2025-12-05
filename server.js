@@ -1042,6 +1042,209 @@ const server = http.createServer((req, res) => {
         pathname = '/api/Wallet/getloaned';
     }
 
+    // Legacy alias / compatibility: some pages call /api/Record/getcontract to retrieve contract/trade records
+    if ((pathname === '/api/Record/getcontract' || pathname === '/api/record/getcontract') && req.method === 'POST') {
+        // Handle directly here: read trades_records.json and return user-specific contracts (paged)
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // parse urlencoded or json
+                let data = {};
+                if (body && body.includes('{')) {
+                    try { data = JSON.parse(body); } catch (e) { /* fallthrough */ }
+                }
+                if (Object.keys(data).length === 0) {
+                    body.split('&').forEach(pair => {
+                        if (!pair) return;
+                        const parts = pair.split('=');
+                        const key = decodeURIComponent(parts[0] || '').trim();
+                        const val = decodeURIComponent((parts[1] || '').replace(/\+/g, ' ')).trim();
+                        if (key) data[key] = val;
+                    });
+                }
+
+                const userid = data.userid || data.user_id || data.uid;
+                const page = Number(data.page || 1) || 1;
+                const pageSize = 10;
+
+                if (!userid) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: [], message: 'Missing userid' }));
+                    return;
+                }
+
+                const tradesFilePath = path.join(__dirname, 'trades_records.json');
+                let trades = [];
+                if (fs.existsSync(tradesFilePath)) {
+                    try { trades = JSON.parse(fs.readFileSync(tradesFilePath, 'utf8')) || []; } catch (e) { trades = []; }
+                }
+
+                // Filter by user id
+                let userTrades = trades.filter(t => String(t.userid) === String(userid) || String(t.user_id) === String(userid));
+
+                // Sort newest first
+                userTrades.sort((a, b) => {
+                    const ta = a && a.created_at ? new Date(a.created_at).getTime() : 0;
+                    const tb = b && b.created_at ? new Date(b.created_at).getTime() : 0;
+                    return tb - ta;
+                });
+
+                // paging
+                const start = (page - 1) * pageSize;
+                const pageTrades = userTrades.slice(start, start + pageSize).map(trade => {
+                    const num = Number(trade.num) || 0;
+                    const status = (trade.status || '').toString().toLowerCase();
+                    // fangxiang: normalize to 1 (up) or 2 (down)
+                    let fangxiang = 2;
+                    if (String(trade.fangxiang).toLowerCase() === 'up' || String(trade.fangxiang).toLowerCase() === 'upward' || String(trade.fangxiang) === '1') fangxiang = 1;
+                    if (String(trade.fangxiang) === '2' || String(trade.fangxiang).toLowerCase() === 'down' || String(trade.fangxiang).toLowerCase() === 'downward') fangxiang = 2;
+
+                    // determine zhuangtai (1 = pending/unsettled)
+                    const zhuangtai = (status === 'pending' || status === '1') ? 1 : 0;
+                    // determine zuizhong (1 = settled / win, 2 = settled / loss)
+                    const zuizhong = (status === 'win' || status === 'success' || status === '2') ? 1 : 0;
+                    const isloss = (status === 'loss' || status === '3') ? 1 : 0;
+
+                    // compute payout (ying)
+                    // For LOSS: ying = -num (negative amount for display in red)
+                    // For WIN: ying = num + profit
+                    // For PENDING: ying = num (no change)
+                    let ying = num;
+                    if (isloss === 1) {
+                        // Loss: show negative amount
+                        ying = -num;
+                    } else if (zuizhong === 1) {
+                        // Win: use recorded fields if available
+                        if (trade.payout) ying = Number(trade.payout);
+                        else if (trade.settled_amount) ying = Number(trade.settled_amount);
+                        else if (trade.profit) ying = Number(num) + Number(trade.profit);
+                        else {
+                            // approximate using a default profit ratio (40%) to match server settlement logic
+                            const profit = Number((num * 0.4).toFixed(2));
+                            ying = Number((num + profit).toFixed(2));
+                        }
+                    }
+
+                    // buytime: convert created_at to unix timestamp seconds
+                    let buytime = 0;
+                    if (trade.created_at) {
+                        const d = new Date(trade.created_at).getTime();
+                        if (Number.isFinite(d)) buytime = Math.floor(d / 1000);
+                    } else if (trade.buytime) {
+                        buytime = Number(trade.buytime);
+                    }
+
+                    return {
+                        id: trade.id,
+                        biming: trade.biming || trade.coin || '',
+                        num: num,
+                        fangxiang: fangxiang,
+                        miaoshu: trade.miaoshu || trade.duration || '',
+                        buytime: buytime,
+                        zhuangtai: zhuangtai,
+                        zuizhong: zuizhong,
+                        ying: ying
+                    };
+                });
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: pageTrades }));
+            } catch (e) {
+                console.error('[record-getcontract] Error:', e.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: [], message: e.message }));
+            }
+        });
+        return;
+    }
+
+    // Admin endpoint: get ALL users' contract records (paginated) - /api/admin/contract/records
+    if ((pathname === '/api/admin/contract/records' || pathname === '/api/admin/contract/all') && req.method === 'GET') {
+        try {
+            const tradesFilePath = path.join(__dirname, 'trades_records.json');
+            let trades = [];
+            if (fs.existsSync(tradesFilePath)) {
+                try { trades = JSON.parse(fs.readFileSync(tradesFilePath, 'utf8')) || []; } catch (e) { trades = []; }
+            }
+
+            // Get query parameters for pagination
+            const urlParts = url.parse(req.url, true);
+            const page = Number(urlParts.query.page || 1) || 1;
+            const pageSize = Number(urlParts.query.limit || 20) || 20;
+
+            // Sort by created_at descending (newest first)
+            let sortedTrades = [...trades].sort((a, b) => {
+                const ta = a && a.created_at ? new Date(a.created_at).getTime() : 0;
+                const tb = b && b.created_at ? new Date(b.created_at).getTime() : 0;
+                return tb - ta;
+            });
+
+            // Paginate
+            const start = (page - 1) * pageSize;
+            const pageTrades = sortedTrades.slice(start, start + pageSize).map(trade => {
+                const num = Number(trade.num) || 0;
+                const status = (trade.status || '').toString().toLowerCase();
+                let fangxiang = 2;
+                if (String(trade.fangxiang).toLowerCase() === 'up' || String(trade.fangxiang).toLowerCase() === 'upward' || String(trade.fangxiang) === '1') fangxiang = 1;
+                if (String(trade.fangxiang) === '2' || String(trade.fangxiang).toLowerCase() === 'down' || String(trade.fangxiang).toLowerCase() === 'downward') fangxiang = 2;
+                const zhuangtai = (status === 'pending' || status === '1') ? 1 : 0;
+                const zuizhong = (status === 'win' || status === 'success' || status === '2') ? 1 : 0;
+                const isloss = (status === 'loss' || status === '3') ? 1 : 0;
+                let ying = num;
+                if (isloss === 1) {
+                    ying = -num;
+                } else if (zuizhong === 1) {
+                    if (trade.payout) ying = Number(trade.payout);
+                    else if (trade.settled_amount) ying = Number(trade.settled_amount);
+                    else if (trade.profit) ying = Number(num) + Number(trade.profit);
+                    else {
+                        const profit = Number((num * 0.4).toFixed(2));
+                        ying = Number((num + profit).toFixed(2));
+                    }
+                }
+                let buytime = 0;
+                if (trade.created_at) {
+                    const d = new Date(trade.created_at).getTime();
+                    if (Number.isFinite(d)) buytime = Math.floor(d / 1000);
+                } else if (trade.buytime) {
+                    buytime = Number(trade.buytime);
+                }
+                return {
+                    id: trade.id,
+                    userid: trade.userid || trade.user_id || '',
+                    username: trade.username || '',
+                    biming: trade.biming || trade.coin || '',
+                    num: num,
+                    fangxiang: fangxiang,
+                    miaoshu: trade.miaoshu || trade.duration || '',
+                    buytime: buytime,
+                    status: status,
+                    zhuangtai: zhuangtai,
+                    zuizhong: zuizhong,
+                    isloss: isloss,
+                    ying: ying,
+                    buyprice: trade.buyprice || '0',
+                    created_at: trade.created_at,
+                    updated_at: trade.updated_at
+                };
+            });
+            const totalRecords = sortedTrades.length;
+            const totalPages = Math.ceil(totalRecords / pageSize);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ 
+                code: 1, 
+                data: pageTrades,
+                pagination: { page: page, limit: pageSize, total: totalRecords, pages: totalPages }
+            }));
+        } catch (e) {
+            console.error('[admin-contract] Error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 0, data: [], message: e.message }));
+        }
+        return;
+    }
+
     // Loan: get loan summary for user (POST) - /api/Wallet/getloaned
     if ((pathname === '/api/Wallet/getloaned' || pathname === '/api/wallet/getloaned') && req.method === 'POST') {
         let body = '';

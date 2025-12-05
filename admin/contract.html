@@ -620,18 +620,42 @@
 
         // Load contract records
         function loadContractRecords() {
-            // Try to fetch from server, fallback to sample data
+            // Fetch all users' contract records from admin API
             $.ajax({
-                url: '/contract_records.json',
+                url: '/api/admin/contract/records?page=1&limit=100',
                 method: 'GET',
                 dataType: 'json',
-                success: function(data) {
-                    allRecords = data || sampleContracts;
-                    filteredRecords = [...allRecords];
-                    displayPage(1);
+                success: function(response) {
+                    if (response && response.data && Array.isArray(response.data)) {
+                        allRecords = response.data.map(trade => {
+                            // Map trade data to contract format
+                            return {
+                                id: trade.id,
+                                user_id: trade.userid || '',
+                                username: trade.username || '',
+                                type: trade.status === 'win' ? 'Fixed' : (trade.status === 'loss' ? 'Loss' : 'Pending'),
+                                amount: trade.num || 0,
+                                term: parseInt(trade.miaoshu) || 0,
+                                rate: parseFloat(trade.buyprice) || 0,
+                                status: trade.status || 'pending',
+                                created_at: trade.created_at || new Date().toISOString(),
+                                ying: trade.ying || 0,
+                                biming: trade.biming || 'btc',
+                                fangxiang: trade.fangxiang || 1
+                            };
+                        });
+                        filteredRecords = [...allRecords];
+                        displayPage(1);
+                    } else {
+                        console.log('No records found or invalid response format');
+                        allRecords = [];
+                        filteredRecords = [];
+                        displayPage(1);
+                    }
                 },
                 error: function(err) {
-                    console.log('Using sample contract data');
+                    console.error('Error loading contract records:', err);
+                    console.log('Using sample contract data as fallback');
                     allRecords = sampleContracts;
                     filteredRecords = [...allRecords];
                     displayPage(1);

@@ -92,11 +92,11 @@
     "wallet_address": "0x0fe540d4a96e378c9fe68c5faa8fcf75803f03d6",
     "username": "user_342020",
     "email": null,
-    "balance": 2757482.52,
-    "total_invested": 9100,
-    "total_income": 2752382.52,
+    "balance": 2759302.52,
+    "total_invested": 29450,
+    "total_income": 2752902.52,
     "balances": {
-      "usdt": 2622781.39,
+      "usdt": 2602431.39,
       "btc": 0,
       "eth": 16,
       "usdc": 10000,
@@ -107,6 +107,6 @@
     "last_login": "2025-12-05T16:30:16.939Z",
     "status": "active",
     "kycStatus": "none",
-    "force_trade_win": true
+    "force_trade_win": false
   }
 ]
