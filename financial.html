@@ -63,10 +63,29 @@
             const xsw = { btc: 8, usdc: 2, eth: 8, pyusd: 2, usdt: 2 }; // 小数位数配置
 
             var urlParams = new URLSearchParams(window.location.search);
-            var type = urlParams.get('type');
+            var type = urlParams.get('type') || '0'; // Default to '0' (All) if not specified
+
+            // Translation helper function
+            function gy(text) {
+                if (window.translations && window.translations[text]) {
+                    return window.translations[text];
+                }
+                return text;
+            }
 
 
             $(document).ready(function() {
+                // Load translations from local en.json
+                $.getJSON('/lang/en.json', function(json) {
+                    window.translations = json;
+                    $("[data-translate]").each(function() {
+                        var key = $(this).data("translate");
+                        if (json[key]) {
+                            $(this).text(json[key]);
+                        }
+                    });
+                });
+
                 loadTransactions();
 
                 $(window).scroll(function() {
@@ -75,6 +94,34 @@
                         $('.y-hd').addClass('y-huadong');
                     } else {
                         $('.y-hd').removeClass('y-huadong');
+                    }
+                });
+
+                // Dropdown select handlers - INSIDE ready function
+                $('.select-trigger').click(function() {
+                    $('.select-options').toggle(); // 切换显示状态
+                });
+
+                // 点击选项
+                $('.select-option').click(function() {
+                    const selectedText = $(this).text();
+                    const selectedValue = $(this).data('value');
+                    
+                    // Update the trigger text
+                    $('.select-trigger').text(selectedText);
+                    
+                    // 关闭下拉选项
+                    $('.select-options').hide();
+
+                    type = selectedValue;
+                    page = 1; // 重置页数
+                    $('.y-re').empty(); // 清空当前内容
+                    loadTransactions(); // 重新加载数据
+                });
+
+                $(document).click(function(e) {
+                    if (!$(e.target).closest('#custom-select').length) {
+                        $('.select-options').hide();
                     }
                 });
             });
@@ -130,32 +177,9 @@
             function loadmore(){
                 loadTransactions();
             }
-
-            $('.select-trigger').click(function() {
-                $('.select-options').toggle(); // 切换显示状态
-            });
-
-            // 点击选项
-            $('.select-option').click(function() {
-                const selectedText = $(this).text();
-                const selectedValue = $(this).data('value');
-                
-                // 关闭下拉选项
-                $('.select-options').hide();
-
-                type = selectedValue;
-                page = 1; // 重置页数
-                $('.y-re').empty(); // 清空当前内容
-                loadTransactions(); // 重新加载数据
-            });
-
-            $(document).click(function(e) {
-                if (!$(e.target).closest('#custom-select').length) {
-                    $('.select-options').hide();
-                }
-            });
-
-        </script>
+                </script>
     <script defer="" src="./financial_files/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon="{&quot;version&quot;:&quot;2024.11.0&quot;,&quot;token&quot;:&quot;eeb085316a57431db0b1a080d3a6bf6e&quot;,&quot;r&quot;:1,&quot;server_timing&quot;:{&quot;name&quot;:{&quot;cfCacheStatus&quot;:true,&quot;cfEdge&quot;:true,&quot;cfExtPri&quot;:true,&quot;cfL4&quot;:true,&quot;cfOrigin&quot;:true,&quot;cfSpeedBrain&quot;:true},&quot;location_startswith&quot;:null}}" crossorigin="anonymous"></script>
 
-</body></html>
+
+	<script src="./js/walletAuth.js" type="text/javascript" charset="utf-8"></script>
+	</body></html>

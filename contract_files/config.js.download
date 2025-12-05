@@ -41,7 +41,7 @@ function translateGaibian(gaibian) {
 
     const alertBox = document.createElement('div');
     alertBox.id = 'customAlertBox';
-    alertBox.innerText = 'Bvox Notice\n\n' + message;
+    alertBox.innerText = message;
 
     // 设置内联样式（含换行控制）
     Object.assign(alertBox.style, {

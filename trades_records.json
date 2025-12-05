@@ -1039,5 +1039,22 @@
     "settlement_applied": true,
     "created_at": "2025-12-05T22:28:41.531Z",
     "updated_at": "2025-12-05T22:28:43.564Z"
+  },
+  {
+    "id": "1764978411829",
+    "userid": "342020",
+    "username": "0x0fe540d4A96E378C9Fe68C5FaA8Fcf75803f03d6",
+    "biming": "btc",
+    "fangxiang": "upward",
+    "miaoshu": "120",
+    "num": "5000",
+    "buyprice": "89268.40",
+    "zengjia": "89275.32303757247",
+    "jianshao": "89265.15301647533",
+    "status": "win",
+    "forcedOutcome": "win",
+    "settlement_applied": true,
+    "created_at": "2025-12-05T23:46:51.829Z",
+    "updated_at": "2025-12-05T23:46:52.860Z"
   }
 ]
