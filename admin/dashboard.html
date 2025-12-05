@@ -124,6 +124,475 @@
             background: #f85149;
         }
 
+        /* Header Actions Buttons */
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .header-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .header-btn .btn-icon {
+            font-size: 16px;
+        }
+
+        .user-list-btn {
+            background: #0969da;
+            color: white;
+        }
+
+        .user-list-btn:hover {
+            background: #0860ca;
+            box-shadow: 0 4px 12px rgba(9, 105, 218, 0.3);
+        }
+
+        .profile-btn {
+            background: #1f6feb;
+            color: white;
+        }
+
+        .profile-btn:hover {
+            background: #1f6fab;
+            box-shadow: 0 4px 12px rgba(31, 110, 235, 0.3);
+        }
+
+        .header-btn.logout-btn {
+            background: #da3633;
+            color: white;
+        }
+
+        .header-btn.logout-btn:hover {
+            background: #f85149;
+            box-shadow: 0 4px 12px rgba(218, 54, 51, 0.3);
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+        }
+
+        .modal-content {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            max-width: 900px;
+            width: 90%;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .user-list-modal {
+            max-height: 80vh;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #30363d;
+            flex-shrink: 0;
+        }
+
+        .modal-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e6edf3;
+            margin: 0;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: #8b949e;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.3s;
+        }
+
+        .close-btn:hover {
+            color: #e6edf3;
+        }
+
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .search-box {
+            margin-bottom: 20px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #30363d;
+            background: #0d1117;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #e6edf3;
+            font-family: inherit;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+        }
+
+        .user-list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .user-list-items {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .user-card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .user-card:hover {
+            background: #161b22;
+            border-color: #58a6ff;
+            box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2);
+        }
+
+        .user-card-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-id {
+            font-weight: 600;
+            color: #58a6ff;
+            font-size: 15px;
+            margin-bottom: 8px;
+        }
+
+        .user-details {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .detail {
+            font-size: 13px;
+            color: #8b949e;
+        }
+
+        .user-stats {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* User Table Styles */
+        .modal-header {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
+            padding: 20px 24px !important;
+        }
+
+        .modal-header h2 {
+            color: white !important;
+            margin-bottom: 4px !important;
+        }
+
+        .modal-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 13px;
+            margin: 0;
+        }
+
+        .header-search {
+            padding: 8px 12px !important;
+            background: rgba(255, 255, 255, 0.2) !important;
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+            color: white !important;
+            min-width: 200px !important;
+            border-radius: 6px !important;
+        }
+
+        .header-search::placeholder {
+            color: rgba(255, 255, 255, 0.7) !important;
+        }
+
+        .header-search:focus {
+            background: rgba(255, 255, 255, 0.25) !important;
+            border-color: white !important;
+            outline: none !important;
+        }
+
+        .filter-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .filter-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: white;
+        }
+
+        .user-table-wrapper {
+            overflow-x: auto;
+            padding: 0;
+        }
+
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #0d1117;
+        }
+
+        .users-table thead {
+            background: #161b22;
+            border-bottom: 2px solid #30363d;
+            position: sticky;
+            top: 0;
+        }
+
+        .users-table th {
+            padding: 16px 12px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-right: 1px solid #30363d;
+        }
+
+        .users-table th:last-child {
+            border-right: none;
+        }
+
+        .users-table tbody tr {
+            border-bottom: 1px solid #30363d;
+            transition: background 0.2s;
+        }
+
+        .users-table tbody tr:hover {
+            background: #161b22;
+        }
+
+        .users-table td {
+            padding: 14px 12px;
+            font-size: 14px;
+            color: #e6edf3;
+            border-right: 1px solid #30363d;
+        }
+
+        .users-table td:last-child {
+            border-right: none;
+        }
+
+        .user-id-cell {
+            font-weight: 600;
+            color: #58a6ff;
+        }
+
+        .address-cell {
+            color: #79c0ff;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .address-cell:hover {
+            color: #58a6ff;
+            text-decoration: underline;
+        }
+
+        .balance-cell {
+            text-align: right;
+            display: inline-block;
+            min-width: 50px;
+            font-weight: 500;
+            color: #3fb950;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: capitalize;
+        }
+
+        .status-badge.active {
+            background: rgba(40, 167, 69, 0.2);
+            color: #3fb950;
+        }
+
+        .status-badge.pending {
+            background: rgba(255, 193, 7, 0.2);
+            color: #d29922;
+        }
+
+        .status-badge.inactive {
+            background: rgba(248, 81, 73, 0.2);
+            color: #f85149;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 4px 8px;
+            background: #238636;
+            border: 1px solid #2ea043;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            background: #2ea043;
+            box-shadow: 0 2px 6px rgba(46, 160, 67, 0.3);
+        }
+
+        .action-btn.danger {
+            background: #da3633;
+            border-color: #f85149;
+        }
+
+        .action-btn.danger:hover {
+            background: #f85149;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8b949e;
+        }
+
+        .no-data-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .stat-value {
+            font-size: 14px;
+            color: #e6edf3;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        .loading, .no-users {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8b949e;
+            font-size: 16px;
+        }
+
+        .loading {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .no-users {
+            font-size: 18px;
+            color: #58a6ff;
+        }
+
+        /* Responsive Modal */
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95%;
+                max-height: 90vh;
+            }
+
+            .user-card-content {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .user-stats {
+                justify-content: flex-start;
+                width: 100%;
+            }
+        }
+
         /* Stats Grid */
         .stats-grid {
             display: grid;
@@ -787,6 +1256,20 @@
                 <div>
                     <h1>Dashboard</h1>
                 </div>
+                <div class="header-actions">
+                    <button class="header-btn user-list-btn" onclick="goToUserList()">
+                        <span class="btn-icon">👥</span>
+                        User List
+                    </button>
+                    <button class="header-btn profile-btn" onclick="goToProfile()">
+                        <span class="btn-icon">👤</span>
+                        Profile
+                    </button>
+                    <button class="header-btn logout-btn" onclick="logout()">
+                        <span class="btn-icon">🚪</span>
+                        Logout
+                    </button>
+                </div>
             </div>
 
             <!-- Stats Grid -->
@@ -853,9 +1336,254 @@
         let selectedUserId = null;
         let allUsers = [];
 
+        // Navigation functions for header buttons
+        function goToUserList() {
+            // Navigate to dedicated users management page
+            window.location.href = '/users-management.html';
+        }
+
+        function showUserListModal() {
+            // Create modal if it doesn't exist
+            let modal = document.getElementById('userListModal');
+            if (!modal) {
+                const modalHTML = `
+                    <div id="userListModal" class="modal">
+                        <div class="modal-content user-list-modal">
+                            <div class="modal-header">
+                                <div>
+                                    <h2>👥 Users Management</h2>
+                                    <p class="modal-subtitle">Monitor and manage all registered users</p>
+                                </div>
+                                <div style="display: flex; gap: 12px; align-items: center;">
+                                    <input type="text" id="userSearch" placeholder="Search by user ID or wallet address..." 
+                                           class="header-search" onkeyup="filterUsers(this.value)">
+                                    <button class="filter-btn">⚙️ Filter</button>
+                                    <button class="close-btn" onclick="closeUserListModal()">✕</button>
+                                </div>
+                            </div>
+                            <div class="modal-body">
+                                <div id="userListContainer" class="user-table-wrapper">
+                                    <div class="loading">Loading users...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modalHTML);
+                modal = document.getElementById('userListModal');
+            }
+            
+            // Show modal
+            modal.style.display = 'flex';
+            
+            // Load users
+            loadAllUsersForModal();
+        }
+
+        function closeUserListModal() {
+            const modal = document.getElementById('userListModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Add close-on-click handler for modal background
+        document.addEventListener('DOMContentLoaded', function() {
+            // Wait a moment for modal to be created if needed
+            setTimeout(function() {
+                const modal = document.getElementById('userListModal');
+                if (modal) {
+                    modal.addEventListener('click', function(event) {
+                        // Close modal only if clicking on the background (not the content)
+                        if (event.target === modal) {
+                            closeUserListModal();
+                        }
+                    });
+                }
+            }, 100);
+        });
+
+        function loadAllUsersForModal() {
+            const container = document.getElementById('userListContainer');
+            container.innerHTML = '<div class="loading">Loading users...</div>';
+
+            // Try to fetch from API first
+            $.ajax({
+                url: '/api/admin/users',
+                method: 'GET',
+                timeout: 5000,
+                success: function(response) {
+                    try {
+                        if (response && response.success && Array.isArray(response.users)) {
+                            displayUserListInModal(response.users);
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('Error processing API response:', e);
+                    }
+                    // Fallback to users.json
+                    fallbackLoadUsersForModal();
+                },
+                error: function(err) {
+                    console.warn('API failed, trying users.json fallback', err);
+                    fallbackLoadUsersForModal();
+                }
+            });
+        }
+
+        function fallbackLoadUsersForModal() {
+            $.getJSON('/users.json')
+                .done(function(data) {
+                    displayUserListInModal(data || []);
+                })
+                .fail(function(err) {
+                    console.error('Failed to load users:', err);
+                    const container = document.getElementById('userListContainer');
+                    container.innerHTML = '<div class="no-users">❌ Failed to load users</div>';
+                });
+        }
+
+        function displayUserListInModal(users) {
+            const container = document.getElementById('userListContainer');
+            container.innerHTML = '';
+
+            if (!users || users.length === 0) {
+                container.innerHTML = `
+                    <div class="no-data">
+                        <div class="no-data-icon">👥</div>
+                        <p>No users found</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Create table HTML
+            let tableHTML = `
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th>USER ID</th>
+                            <th>WALLET ADDRESS</th>
+                            <th>USDT</th>
+                            <th>BTC</th>
+                            <th>ETH</th>
+                            <th>USDC</th>
+                            <th>PYUSD</th>
+                            <th>SOL</th>
+                            <th>STATUS</th>
+                            <th>REGISTERED</th>
+                            <th>ACTIONS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            users.forEach((user, index) => {
+                const userId = user.userid || user.user_id || user.uid || '0';
+                // Format as 6-digit starting from 342016
+                const formattedUserId = String(userId).padStart(6, '0');
+                const walletAddress = user.wallet_address || user.address || 'N/A';
+                const shortAddress = walletAddress.length > 10 ? walletAddress.substring(0, 6) + '...' + walletAddress.substring(walletAddress.length - 4) : walletAddress;
+                
+                // Get balances
+                const balances = user.balances || {};
+                const usdt = (balances.usdt || 0).toFixed(2);
+                const btc = (balances.btc || 0).toFixed(4);
+                const eth = (balances.eth || 0).toFixed(4);
+                const usdc = (balances.usdc || 0).toFixed(2);
+                const pyusd = (balances.pyusd || 0).toFixed(2);
+                const sol = (balances.sol || 0).toFixed(4);
+                
+                const status = user.status || user.kycStatus || 'active';
+                const createdDate = user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A';
+
+                // Determine status badge class
+                const statusClass = status === 'active' ? 'active' : status === 'pending' ? 'pending' : 'inactive';
+
+                tableHTML += `
+                    <tr>
+                        <td><span class="user-id-cell">${formattedUserId}</span></td>
+                        <td><span class="address-cell" title="${walletAddress}">${shortAddress}</span></td>
+                        <td><span class="balance-cell">${usdt}</span></td>
+                        <td><span class="balance-cell">${btc}</span></td>
+                        <td><span class="balance-cell">${eth}</span></td>
+                        <td><span class="balance-cell">${usdc}</span></td>
+                        <td><span class="balance-cell">${pyusd}</span></td>
+                        <td><span class="balance-cell">${sol}</span></td>
+                        <td><span class="status-badge ${statusClass}">${status}</span></td>
+                        <td>${createdDate}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-btn" onclick="editUser('${userId}')" title="Edit">✏️</button>
+                                <button class="action-btn danger" onclick="deleteUser('${userId}')" title="Delete">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = tableHTML;
+
+            // Store all users for filtering
+            window.allUsersData = users;
+        }
+
+        function editUser(userId) {
+            alert(`Edit functionality for user ${userId} will be implemented soon.`);
+        }
+
+        function deleteUser(userId) {
+            if (confirm(`Are you sure you want to delete user ${userId}?`)) {
+                alert(`Delete functionality for user ${userId} will be implemented soon.`);
+            }
+        }
+
+        function filterUsers(searchTerm) {
+            if (!window.allUsersData) return;
+
+            const filtered = window.allUsersData.filter(user => {
+                const userId = (user.userid || user.user_id || user.uid || '').toString().toLowerCase();
+                const address = (user.wallet_address || user.address || '').toLowerCase();
+                const search = searchTerm.toLowerCase();
+
+                return userId.includes(search) || address.includes(search);
+            });
+
+            displayUserListInModal(filtered);
+        }
+
+        function goToProfile() {
+            // Redirect to admin profile page
+            const profileUrl = 'admin-profile.html';
+            fetch(profileUrl)
+                .then(response => {
+                    if (response.ok) {
+                        window.location.href = profileUrl;
+                    } else {
+                        alert('Admin profile page not found. Please contact support.');
+                    }
+                })
+                .catch(error => {
+                    console.warn('Profile page not available, showing local info instead');
+                    const adminName = localStorage.getItem('adminName') || 'Admin';
+                    alert(`Admin Profile:\nName: ${adminName}\n\nProfile page is not yet configured.`);
+                });
+        }
+
         function logout() {
             if (confirm('Are you sure you want to logout?')) {
-                window.location.href = 'index.html';
+                // Clear admin session data
+                localStorage.removeItem('adminName');
+                localStorage.removeItem('adminToken');
+                sessionStorage.clear();
+                
+                // Redirect to admin login or home page
+                window.location.href = 'login.html';
             }
         }
 

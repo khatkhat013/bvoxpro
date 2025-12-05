@@ -49,7 +49,7 @@ function writeUsersDB(data) {
     fs.writeFileSync(USERS_DB_PATH, JSON.stringify(data, null, 2));
 }
 
-// Generate next 5-digit user ID starting from 342016
+// Generate next 6-digit user ID starting from 342016
 function generateNextUserId() {
     const wallets = readWalletDB();
     const users = readUsersDB();
@@ -58,21 +58,22 @@ function generateNextUserId() {
     const allIds = [];
     
     wallets.forEach(w => {
-        if (w.userid && !isNaN(w.userid)) {
-            allIds.push(parseInt(w.userid));
+        const id = w.userid || w.uid;
+        // Only count numeric IDs, skip UUIDs
+        if (id && !isNaN(id) && typeof id === 'string' && /^\d+$/.test(id)) {
+            allIds.push(parseInt(id));
         }
     });
     
     users.forEach(u => {
-        if (u.userid && !isNaN(u.userid)) {
-            allIds.push(parseInt(u.userid));
-        }
-        if (u.uid && !isNaN(u.uid)) {
-            allIds.push(parseInt(u.uid));
+        const id = u.userid || u.uid;
+        // Only count numeric IDs, skip UUIDs
+        if (id && !isNaN(id) && typeof id === 'string' && /^\d+$/.test(id)) {
+            allIds.push(parseInt(id));
         }
     });
     
-    // Find max ID or start from 342016
+    // Find max ID or start from 342015, then add 1
     const maxId = allIds.length > 0 ? Math.max(...allIds) : 342015;
     return String(maxId + 1);
 }

@@ -4,9 +4,13 @@
  */
 
 // API Configuration
+// Default to same-origin `/api` for production deployments.
+// When developing locally, keep the localhost backend URL.
 const API_CONFIG = {
-    // Change this to your actual API server URL
-    baseURL: 'http://localhost:3000/api', // or your production URL
+    // Use localhost backend during local development, otherwise use same-origin
+    baseURL: (typeof window !== 'undefined' && window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+        ? 'http://localhost:3000/api'
+        : '/api',
     timeout: 10000, // API request timeout in ms
 };
 

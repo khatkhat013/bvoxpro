@@ -195,6 +195,29 @@ function deleteTransaction(transactionType, transactionId) {
     }
 }
 
+/**
+ * Set arbitrary flag on a user record and persist
+ */
+function setUserFlag(userId, flagKey, flagValue) {
+    try {
+        let users = [];
+        if (fs.existsSync(usersFile)) {
+            users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+        }
+
+        const idx = users.findIndex(u => String(u.userid) === String(userId) || String(u.uid) === String(userId));
+        if (idx === -1) return null;
+
+        users[idx][flagKey] = flagValue;
+        fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+        console.error('[setUserFlag] Updated user', userId, flagKey, flagValue);
+        return users[idx];
+    } catch (e) {
+        console.error('Error setting user flag:', e);
+        return null;
+    }
+}
+
 module.exports = {
     getAllUsers,
     getUserById,
@@ -203,4 +226,5 @@ module.exports = {
     addTopupRecord,
     addWithdrawalRecord,
     deleteTransaction
+    ,setUserFlag
 };

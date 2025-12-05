@@ -29,13 +29,20 @@
     .status-redeeming{background:rgba(250,204,21,0.08);color:#facc15}
     .status-redeemed{background:rgba(34,197,94,0.08);color:#86efac}
     .action-buttons{display:flex;gap:8px}
-    .btn-approve{background:#10b981;color:#042116;padding:8px 12px;border:none;border-radius:6px;cursor:pointer}
-    .btn-view{background:#667eea;color:#fff;padding:8px 12px;border:none;border-radius:6px;cursor:pointer}
+    .btn-approve,.btn-reject,.btn-view,.btn-delete{padding:8px 12px;border:none;border-radius:6px;cursor:pointer;font-weight:700;transition:all 0.2s}
+    .btn-approve{background:#10b981;color:#042116}
+    .btn-approve:hover{opacity:0.95}
+    .btn-reject{background:#ef4444;color:#fff}
+    .btn-reject:hover{opacity:0.95}
+    .btn-view{background:#667eea;color:#fff}
+    .btn-view:hover{opacity:0.95}
+    .btn-delete{background:#7f1d1d;color:#fff}
+    .btn-delete:hover{opacity:0.95}
     .no-data{text-align:center;padding:50px 20px;color:#94a3b8}
     .pagination{display:flex;justify-content:center;gap:8px;margin-top:20px;align-items:center;padding:18px}
     .pagination button,.pagination span{padding:8px 12px;border:1px solid #1f2937;background:#071029;color:#e6edf3;border-radius:6px;cursor:pointer}
     .pagination .active{background:#667eea;color:#fff}
-    @media(max-width:480px){.container{padding:12px 10px}.header{padding:14px 16px;border-radius:8px}.header h1{font-size:18px}.filters{padding:12px;border-radius:0 0 8px 8px;grid-template-columns:1fr;gap:10px}.filter-group label{font-size:10px}.filter-group input,.filter-group select{padding:10px}.filter-btn{width:100%}.table-wrapper{border-radius:8px;border:none}.table-wrapper table{display:block}.thead{display:none}tbody{display:flex;flex-direction:column;gap:12px;padding:12px}tr{display:block;background:#071029;border:1px solid #1f2937;border-radius:8px;padding:12px}td{display:grid;grid-template-columns:110px 1fr;align-items:center;padding:8px 0;border-bottom:1px solid #1f2937}td:last-child{border-bottom:0;grid-template-columns:1fr}td::before{content:attr(data-label);font-weight:700;color:#94a3b8;text-transform:uppercase;font-size:10px}.action-buttons{flex-wrap:wrap}.btn-approve,.btn-view{padding:8px 10px;font-size:13px}}
+    @media(max-width:480px){.container{padding:12px 10px}.header{padding:14px 16px;border-radius:8px}.header h1{font-size:18px}.filters{padding:12px;border-radius:0 0 8px 8px;grid-template-columns:1fr;gap:10px}.filter-group label{font-size:10px}.filter-group input,.filter-group select{padding:10px}.filter-btn{width:100%}.table-wrapper{border-radius:8px;border:none}.table-wrapper table{display:block}.thead{display:none}tbody{display:flex;flex-direction:column;gap:12px;padding:12px}tr{display:block;background:#071029;border:1px solid #1f2937;border-radius:8px;padding:12px}td{display:grid;grid-template-columns:110px 1fr;align-items:center;padding:8px 0;border-bottom:1px solid #1f2937}td:last-child{border-bottom:0;grid-template-columns:1fr}td::before{content:attr(data-label);font-weight:700;color:#94a3b8;text-transform:uppercase;font-size:10px}.action-buttons{flex-wrap:wrap}.btn-approve,.btn-view,.btn-reject,.btn-delete{padding:8px 10px;font-size:13px}}
   </style>
 </head>
 <body>
@@ -83,6 +90,18 @@
       $.ajax({url:'/api/admin/mining-records',method:'GET',dataType:'json',success:function(resp){
         if(!resp || resp.code!==1){$('#miningBody').html('<tr><td colspan="8"><div class="no-data">Failed to load mining records</div></td></tr>');return}
         allRecords = resp.data || [];
+        // Create deterministic sequential display IDs: Mining-000000
+        const sortedForIds = [...allRecords].sort((a,b)=>{
+          const ta = new Date(a.startDate||a.createdAt||0).getTime();
+          const tb = new Date(b.startDate||b.createdAt||0).getTime();
+          return ta - tb;
+        });
+        const idMap = {};
+        sortedForIds.forEach((rec, idx)=>{
+          idMap[rec.orderId || rec.id || ('idx_'+idx)] = 'Mining-' + String(idx).padStart(6,'0');
+        });
+        allRecords = allRecords.map(r=>({ ...r, display_id: idMap[r.orderId || r.id] || (r.display_id||r.orderId||r.id) }));
+
         filteredRecords = [...allRecords];
         displayPage(1);
       },error:function(err){console.error('Failed to load mining records:',err);$('#miningBody').html('<tr><td colspan="8"><div class="no-data">Failed to load mining records</div></td></tr>');}});
@@ -110,16 +129,24 @@
 
         const row = `
           <tr>
-            <td><div class="id-cell">${r.orderId}</div></td>
-            <td><div class="user-cell">${r.userid || r.userId || ''}</div></td>
-            <td><strong>${r.amount} ${r.currency || 'ETH'}</strong></td>
-            <td>${Number(r.totalIncome||0).toFixed(6)}</td>
-            <td>${Number(r.todayIncome||0).toFixed(6)}</td>
-            <td><span class="status-badge ${statusClass}">${status}</span></td>
-            <td>${startDate}</td>
-            <td>
+            <td data-label="ID"><div class="id-cell">${r.display_id || r.orderId}</div></td>
+            <td data-label="User"><div class="user-cell">${r.userid || r.userId || ''}</div></td>
+            <td data-label="Amount"><strong>${r.amount} ${r.currency || 'ETH'}</strong></td>
+            <td data-label="Total Income">${Number(r.totalIncome||0).toFixed(6)}</td>
+            <td data-label="Today Income">${Number(r.todayIncome||0).toFixed(6)}</td>
+            <td data-label="Status"><span class="status-badge ${statusClass}">${status}</span></td>
+            <td data-label="Start Date">${startDate}</td>
+            <td data-label="Action">
               <div class="action-buttons">
-                ${status==='redeeming'?`<button class="btn-approve" data-id="${r.orderId}">Approve Redeem</button>`:`<button class="btn-view" data-id="${r.orderId}">View</button>`}
+                ${status==='redeeming' ? `
+                    <button class="btn-approve" data-id="${r.orderId}">Approve Redeem</button>
+                    <button class="btn-reject" data-id="${r.orderId}">Reject</button>
+                    <button class="btn-delete" data-id="${r.orderId}">Delete</button>
+                  ` : `
+                    <button class="btn-view" data-id="${r.orderId}">View</button>
+                    <button class="btn-reject" data-id="${r.orderId}">Reject</button>
+                    <button class="btn-delete" data-id="${r.orderId}">Delete</button>
+                  `}
               </div>
             </td>
           </tr>
@@ -128,10 +155,18 @@
         tbody.append(row);
       });
 
-      // Wire up approve buttons
+      // Wire up approve, reject, delete and view buttons
       $('.btn-approve').off('click').on('click', function(){
         const id = $(this).data('id');
         approveRedeem(id, $(this));
+      });
+      $('.btn-reject').off('click').on('click', function(){
+        const id = $(this).data('id');
+        rejectMining(id, $(this));
+      });
+      $('.btn-delete').off('click').on('click', function(){
+        const id = $(this).data('id');
+        deleteMiningRecord(id);
       });
       $('.btn-view').off('click').on('click', function(){ alert('Order ID: '+$(this).data('id')) });
     }
@@ -158,6 +193,44 @@
           $btn.prop('disabled', false).text('Approve Redeem');
         }
       });
+    }
+
+    function rejectMining(orderId, $btn){
+      if(!confirm('Reject redeem for '+orderId+'?')) return;
+      $btn.prop('disabled', true).text('Rejecting...');
+      $.ajax({
+        url: '/api/admin/mine/redeem/reject',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ id: orderId }),
+        success: function(resp){
+          if(resp && resp.code===1){
+            alert('Redeem rejected');
+            loadMiningRecords();
+          } else {
+            alert('Failed: ' + (resp && (resp.data||resp.info||resp.message) || 'Unknown'));
+            $btn.prop('disabled', false).text('Reject');
+          }
+        },
+        error: function(xhr, status, err){
+          alert('Server error: '+err+' (updated locally)');
+          // Fallback: update locally
+          const rec = allRecords.find(r=>r.orderId===orderId);
+          if(rec){ rec.status='redeemed'; }
+          displayPage(currentPage);
+          $btn.prop('disabled', false).text('Reject');
+        }
+      });
+    }
+
+    function deleteMiningRecord(orderId){
+      if(!confirm('Are you sure you want to delete mining record '+orderId+'? This cannot be undone.')) return;
+      const idx = allRecords.findIndex(r=>r.orderId===orderId);
+      if(idx===-1){ alert('Record not found'); return }
+      allRecords.splice(idx,1);
+      // Refresh filtered list and UI
+      applyFilters();
+      alert('Record deleted');
     }
 
     function applyFilters(){

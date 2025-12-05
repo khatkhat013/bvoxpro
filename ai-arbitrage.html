@@ -262,7 +262,7 @@
             $(document).ready(function() {
                 // Fetch arbitrage products from new API
                 $.ajax({
-                    url: 'http://localhost:3001/api/arbitrage/products',
+                    url: '/api/arbitrage/products',
                     type: 'GET',
                     dataType: 'json',
                     success: function(res) {
@@ -325,7 +325,7 @@
                 
                 // Fetch user arbitrage statistics
                 $.ajax({
-                    url: 'http://localhost:3001/api/arbitrage/stats?user_id=' + userid,
+                    url: '/api/arbitrage/stats?user_id=' + userid,
                     type: 'GET',
                     dataType: 'json',
                     success: function(res) {

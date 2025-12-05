@@ -226,7 +226,11 @@
                     }
 
                     const decimalPlaces = xsw[record.coin.toLowerCase()] || 2;
-                    const formattedAmount = parseFloat(record.amount).toFixed(decimalPlaces);
+                    // Normalize amount sign to avoid duplicated signs like "+-500.00".
+                    const rawAmount = Number(record.amount) || 0;
+                    const sign = rawAmount >= 0 ? '+' : '-';
+                    const formattedAmount = Math.abs(rawAmount).toFixed(decimalPlaces);
+                    const color = rawAmount >= 0 ? '#4caf50' : '#f44336';
 
                     html += `
                         <div class="y-re-box">
@@ -239,8 +243,8 @@
                                 </div>
                             </div>
                             <div class="y-re-br">
-                                <span class="y-re-je" style="color: ${record.direction === 'in' ? '#4caf50' : '#f44336'}">
-                                    ${record.direction === 'in' ? '+' : '-'}${formattedAmount}
+                                <span class="y-re-je" style="color: ${color}">
+                                    ${sign}${formattedAmount}
                                 </span>
                             </div>
                         </div>

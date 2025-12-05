@@ -47,17 +47,24 @@ function initOnReady1(kLineDataList){
 
     // Filter out any invalid points without proper numeric 'close' value
     kLineDataList = (kLineDataList || []).filter(function(item){
-      return item && item.close !== undefined && item.close !== null && !isNaN(Number(item.close));
+      return item && (item.close !== undefined || item.c !== undefined) && (item.close != null || item.c != null) && !isNaN(Number(item.close || item.c));
     });
     var chartDataList = kLineDataList.map(function (data) {
-        return {
-            timestamp: data.time,
-            open: data.open,
-            high: data.high,
-            low: data.low,
-            close: data.close,
-            volume:data.volume,
-        }
+      // Normalize various possible field names from different feeds
+      var ts = data.timestamp || data.time || data.id || data.t;
+      var close = (data.close != null) ? data.close : (data.c != null ? data.c : null);
+      var open = (data.open != null) ? data.open : (data.o != null ? data.o : null);
+      var high = (data.high != null) ? data.high : (data.h != null ? data.h : null);
+      var low = (data.low != null) ? data.low : (data.l != null ? data.l : null);
+      var vol = (data.volume != null) ? data.volume : (data.vol != null ? data.vol : (data.v != null ? data.v : 0));
+      return {
+        timestamp: Number(ts) || 0,
+        open: Number(open) || 0,
+        high: Number(high) || 0,
+        low: Number(low) || 0,
+        close: Number(close) || 0,
+        volume: Number(vol) || 0,
+      }
     })
     
     chart.applyNewData(chartDataList)
@@ -228,15 +235,17 @@ class Deedfeeds {
 
         data.data && data.data.forEach(item => {
             try{
-                const parsedClose = Number(item.close);
-                if (item && item.id && !isNaN(parsedClose)) {
+                // Normalize fields: support close/c, open/o, high/h, low/l, vol/v
+                const parsedClose = Number(item.close != null ? item.close : (item.c != null ? item.c : NaN));
+                const ts = item.id || item.t || item.timestamp || item.time;
+                if (item && ts && !isNaN(parsedClose)) {
                     historyData.unshift({
-                      timestamp: item.id * 1000, // timestamp in ms
-                      open: Number(item.open), // open
-                      high: Number(item.high), // high
-                      low: Number(item.low), // low
+                      timestamp: Number(ts) * 1000, // timestamp in ms
+                      open: Number(item.open != null ? item.open : (item.o != null ? item.o : 0)),
+                      high: Number(item.high != null ? item.high : (item.h != null ? item.h : 0)),
+                      low: Number(item.low != null ? item.low : (item.l != null ? item.l : 0)),
                       close: parsedClose, // close
-                      volume: Number(item.vol) // volume
+                      volume: Number(item.vol != null ? item.vol : (item.v != null ? item.v : 0)) // volume
                     })
                 } // else ignore malformed data points
             }catch(e){}
@@ -255,15 +264,17 @@ class Deedfeeds {
             let historyData1=[]
             data.data && data.data.forEach(item => {
               try{
-                const parsedClose = Number(item.close)
-                if(item && item.id && !isNaN(parsedClose)){
+                // normalize fields and validate
+                const parsedClose = Number(item.close != null ? item.close : (item.c != null ? item.c : NaN));
+                const ts = item.id || item.t || item.timestamp || item.time;
+                if(item && ts && !isNaN(parsedClose)){
                   historyData1.unshift({
-                    timestamp: item.id * 1000, // 时间
-                    open: Number(item.open), // 开
-                    high: Number(item.high), // 高
-                    low: Number(item.low), // 低
+                    timestamp: Number(ts) * 1000, // 时间 (ms)
+                    open: Number(item.open != null ? item.open : (item.o != null ? item.o : 0)),
+                    high: Number(item.high != null ? item.high : (item.h != null ? item.h : 0)),
+                    low: Number(item.low != null ? item.low : (item.l != null ? item.l : 0)),
                     close: parsedClose, // 收
-                    volume: Number(item.vol) // 交易量
+                    volume: Number(item.vol != null ? item.vol : (item.v != null ? item.v : 0)) // 交易量
                   })
                 }
               }catch(e){}

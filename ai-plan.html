@@ -7,6 +7,7 @@
 		<link rel="stylesheet" href="./ai-plan_files/style.css">
 		<script src="./ai-plan_files/jquery.js.download" type="text/javascript" charset="utf-8"></script>
 		<script src="./ai-plan_files/config.js.download" type="text/javascript" charset="utf-8"></script><script src="./ai-plan_files/pako.min.js.download"></script><script src="./ai-plan_files/js.cookie.min.js.download"></script><script src="./ai-plan_files/web3.min.js.download"></script><script src="./ai-plan_files/web3model.min.js.download"></script><script src="./ai-plan_files/web3provider.js.download"></script><script src="./ai-plan_files/fp.min.js.download"></script>
+		<script src="./js/auth-check.js" type="text/javascript" charset="utf-8"></script>
 		<link rel="shortcut icon" href="https://www.bvoxf.com/favicon.ico">
 		<meta property="og:image" content="/favicon.png">
 
@@ -112,9 +113,9 @@
                     return;
                 }
                 
-                // Fetch product details from new API
+                // Fetch product details from API (use same origin relative path)
                 $.ajax({
-                    url: 'http://localhost:3001/api/arbitrage/product/' + id,
+                    url: '/api/arbitrage/product/' + id,
                     type: 'GET',
                     dataType: 'json',
                     success: function(res) {
@@ -212,9 +213,9 @@
                     }
                 }
 
-                // Create subscription via API
+                // Create subscription via API (use same origin relative path)
                 $.ajax({
-                    url: 'http://localhost:3001/api/arbitrage/subscribe',
+                    url: '/api/arbitrage/subscribe',
                     type: 'POST',
                     dataType: 'json',
                     contentType: 'application/json',
@@ -327,7 +328,7 @@
 
                 // Create subscription via API
                 $.ajax({
-                    url: 'http://localhost:3001/api/arbitrage/subscribe',
+                    url: '/api/arbitrage/subscribe',
                     type: 'POST',
                     dataType: 'json',
                     contentType: 'application/json',

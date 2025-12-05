@@ -222,7 +222,8 @@
 
         .btn-approve,
         .btn-reject,
-        .btn-view {
+        .btn-view,
+        .btn-delete {
             padding: 6px 12px;
             border: none;
             border-radius: 4px;
@@ -257,6 +258,15 @@
 
         .btn-view:hover {
             background: #764ba2;
+        }
+
+        .btn-delete {
+            background: #da3633;
+            color: white;
+        }
+
+        .btn-delete:hover {
+            background: #f85149;
         }
 
         .no-data {
@@ -307,6 +317,54 @@
         .pagination button:disabled {
             cursor: not-allowed;
             opacity: 0.5;
+        }
+
+        /* Modal for image viewer */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #252d3d;
+            padding: 20px;
+            border-radius: 12px;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: auto;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #e6edf3;
+            cursor: pointer;
+        }
+
+        .modal-close:hover {
+            color: #667eea;
+        }
+
+        .modal-image {
+            max-width: 100%;
+            max-height: 80vh;
+            border-radius: 8px;
         }
 
         /* Mobile-First Responsive Design */
@@ -558,7 +616,6 @@
                         <th>AMOUNT</th>
                         <th>ADDRESS</th>
                         <th>STATUS</th>
-                        <th>ASSIGNED ADMIN</th>
                         <th>DATE</th>
                         <th>ACTION</th>
                     </tr>
@@ -595,6 +652,16 @@
                 dataType: 'json',
                 success: function(data) {
                     allRecords = data || [];
+
+                    // Assign deterministic sequential display IDs (TopUp-000000, TopUp-000001, ...)
+                    const sortedForIds = [...allRecords].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                    const idMap = {};
+                    sortedForIds.forEach((r, idx) => {
+                        const num = idx;
+                        idMap[r.id] = 'TopUp-' + String(num).padStart(6, '0');
+                    });
+                    allRecords = allRecords.map(r => ({ ...r, display_id: idMap[r.id] || r.id }));
+
                     filteredRecords = [...allRecords];
                     displayPage(1);
                 },
@@ -656,21 +723,22 @@
 
                 const row = `
                     <tr>
-                        <td><div class="id-cell">${record.id}</div></td>
-                        <td><div class="user-cell">${record.user_id}</div></td>
-                        <td><span class="coin-badge">${record.coin}</span></td>
-                        <td><strong>${record.amount}</strong></td>
-                        <td><div class="address-cell">${record.address}</div></td>
-                        <td><span class="status-badge ${statusClass}">${record.status || 'pending'}</span></td>
-                        <td><div class="admin-cell">—</div></td>
-                        <td><div class="date-cell">${createdDate}</div></td>
-                        <td>
+                        <td data-label="ID"><div class="id-cell">${record.display_id || record.id}</div></td>
+                        <td data-label="User"><div class="user-cell">${record.user_id}</div></td>
+                        <td data-label="Coin"><span class="coin-badge">${record.coin}</span></td>
+                        <td data-label="Amount"><strong>${record.amount}</strong></td>
+                        <td data-label="Address"><div class="address-cell">${record.address}</div></td>
+                        <td data-label="Status"><span class="status-badge ${statusClass}">${record.status || 'pending'}</span></td>
+                        <td data-label="Date"><div class="date-cell">${createdDate}</div></td>
+                        <td data-label="Action">
                             <div class="action-buttons">
                                 ${record.status === 'pending' ? `
                                     <button class="btn-approve" onclick="updateStatus('${record.id}', 'approved')">Approve</button>
                                     <button class="btn-reject" onclick="updateStatus('${record.id}', 'rejected')">Reject</button>
+                                    <button class="btn-delete" onclick="deleteRecord('${record.id}')">Delete</button>
                                 ` : `
-                                    <button class="btn-view">View</button>
+                                    <button class="btn-view" onclick="showImage('${record.photo_url || ''}')">View</button>
+                                    <button class="btn-delete" onclick="deleteRecord('${record.id}')">Delete</button>
                                 `}
                             </div>
                         </td>
@@ -679,6 +747,46 @@
 
                 tbody.append(row);
             });
+        }
+
+        // Show image in modal
+        function showImage(imageUrl) {
+            if (!imageUrl) {
+                alert('No image available for this record');
+                return;
+            }
+            const modal = $(`
+                <div class="modal show" onclick="closeImageModal(event)">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <span class="modal-close" onclick="closeImageModal()">×</span>
+                        <img src="${imageUrl}" alt="Proof" class="modal-image">
+                    </div>
+                </div>
+            `);
+            $('body').append(modal);
+        }
+
+        function closeImageModal(event) {
+            if (event && event.target.className !== 'modal show') return;
+            $('.modal').remove();
+        }
+
+        // Delete a record
+        function deleteRecord(recordId) {
+            if (!confirm('Are you sure you want to delete this record? This action cannot be undone.')) {
+                return;
+            }
+
+            const index = allRecords.findIndex(r => r.id === recordId);
+            if (index === -1) {
+                alert('Record not found');
+                return;
+            }
+
+            allRecords.splice(index, 1);
+            applyFilters();
+            console.log(`Deleted record ${recordId}`);
+            alert('Record deleted successfully!');
         }
 
         // Update record status

@@ -952,60 +952,108 @@ app.post('/api/Mine/setmineorder', async (req, res) => {
  * Schedule automatic daily rewards for mining
  * Adds reward to user's ETH balance every 24 hours
  */
-function scheduleRewards(userid, stakedAmount, dailyYield, orderId) {
+function scheduleRewards(userid, stakedAmount, dailyYield, orderId, initialDelayMs) {
     const dailyReward = stakedAmount * dailyYield;
-    
-    // Calculate next payout time (24 hours from now)
-    const nextPayout = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    
-    console.log(`⏱️ Scheduling rewards for user ${userid}:`, {
+
+    console.log(`⏱️ Scheduling rewards for user ${userid} (order ${orderId}):`, {
         stakedAmount: stakedAmount,
         dailyYield: (dailyYield * 100) + '%',
         dailyReward: dailyReward.toFixed(8) + ' ETH',
-        nextPayout: nextPayout,
+        initialDelayMs: initialDelayMs || '(24h default)'
     });
 
-    // Set interval to add rewards every 24 hours
-    const rewardInterval = setInterval(async () => {
+    // Core reward application logic
+    async function applyReward() {
         try {
-            // Get current user data
             const user = getUserByUserId(userid);
             if (!user) {
-                console.log(`⚠️ User ${userid} not found, stopping rewards`);
-                clearInterval(rewardInterval);
-                return;
+                console.log(`⚠️ User ${userid} not found, skipping reward for order ${orderId}`);
+                return false;
             }
 
-            // Check if mining order is still active
             const mining = await Mining.findById(orderId);
             if (!mining || mining.status !== 'active') {
                 console.log(`⚠️ Mining order ${orderId} no longer active, stopping rewards`);
-                clearInterval(rewardInterval);
-                return;
+                return false;
             }
 
-            // Add daily reward to user's ETH balance
             const currentBalance = user.balances?.eth || 0;
             const newBalance = currentBalance + dailyReward;
-            
+
             updateUserBalance(userid, 'eth', newBalance);
 
-            // Update mining record
             mining.totalIncome = (mining.totalIncome || 0) + dailyReward;
             mining.todayIncome = dailyReward;
             mining.lastIncomeAt = new Date();
             await mining.save();
 
-            console.log(`✅ Reward added for user ${userid}:`, {
+            console.log(`✅ Reward added for user ${userid} (order ${orderId}):`, {
                 dailyReward: dailyReward.toFixed(8) + ' ETH',
                 newBalance: newBalance.toFixed(8) + ' ETH',
                 totalIncome: mining.totalIncome.toFixed(8) + ' ETH',
                 timestamp: new Date(),
             });
+
+            return true;
         } catch (error) {
-            console.error(`Error adding reward for user ${userid}:`, error);
+            console.error(`Error adding reward for user ${userid} (order ${orderId}):`, error);
+            return false;
         }
-    }, 24 * 60 * 60 * 1000); // Every 24 hours
+    }
+
+    // We use setTimeout for the initial delay (so we can resume cadence correctly), then setInterval every 24h
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    let intervalId = null;
+
+    const startInterval = () => {
+        if (intervalId) return;
+        intervalId = setInterval(async () => {
+            const ok = await applyReward();
+            if (!ok && intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }, ONE_DAY);
+    };
+
+    if (typeof initialDelayMs === 'number' && initialDelayMs > 0) {
+        // Schedule first reward after initialDelayMs, then start regular interval
+        setTimeout(async () => {
+            const ok = await applyReward();
+            if (ok) startInterval();
+        }, initialDelayMs);
+        console.log(`⏱️ Next payout for order ${orderId} scheduled in ${Math.round(initialDelayMs/1000)}s`);
+    } else {
+        // Default behavior: start interval which will run every 24h (first run in ~24h)
+        startInterval();
+        console.log(`⏱️ Reward interval started for order ${orderId}, first payout in ~24 hours`);
+    }
+}
+
+// Resume schedules for active mining orders on server startup
+async function resumeMiningSchedules() {
+    try {
+        const active = await Mining.find({ status: 'active' });
+        if (!active || active.length === 0) {
+            console.log('No active mining orders to resume scheduling for.');
+            return;
+        }
+
+        const ONE_DAY = 24 * 60 * 60 * 1000;
+        active.forEach(rec => {
+            const last = rec.lastIncomeAt ? new Date(rec.lastIncomeAt).getTime()
+                        : (rec.activationDate ? new Date(rec.activationDate).getTime() : (rec.startDate ? new Date(rec.startDate).getTime() : (rec.createdAt ? new Date(rec.createdAt).getTime() : Date.now())));
+            const now = Date.now();
+            const elapsed = now - last;
+            // If elapsed >= ONE_DAY, schedule immediate run (0 delay). Otherwise compute remaining time until next payout.
+            const nextDelay = elapsed >= ONE_DAY ? 0 : (ONE_DAY - (elapsed % ONE_DAY));
+
+            console.log(`Resuming schedule for order ${rec._id}, user ${rec.userId} — next payout in ${Math.round(nextDelay/1000)}s`);
+            scheduleRewards(rec.userId, rec.stakedAmount || rec.amount || 0, (rec.dailyYield || 0), rec._id, nextDelay);
+        });
+    } catch (error) {
+        console.error('Error resuming mining schedules:', error);
+    }
 }
 
 /**
@@ -1064,6 +1112,9 @@ app.use((err, req, res, next) => {
 // ========== START SERVER ==========
 
 app.listen(PORT, () => {
+    // Resume any active mining schedules when the server starts
+    resumeMiningSchedules().catch(err => console.error('Failed to resume mining schedules at startup:', err));
+
     console.log(`
 ╔════════════════════════════════════════╗
 ║   BVOX Finance Backend Server          ║

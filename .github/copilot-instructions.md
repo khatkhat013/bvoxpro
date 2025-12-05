@@ -1,57 +1,143 @@
 <!-- Copilot / AI agent instructions for contributors working on this repo -->
 # BVOX Finance — Assistant Instructions
 
-This file is a short, actionable guide for AI coding agents (Copilot-style) to be immediately productive in this repository.
+Essential knowledge for immediately productive AI coding work on this multi-service cryptocurrency trading platform.
 
-1) Big picture
-- Frontend: static multi-page site (root HTML files, many per-page `*_files` folders and `Bvox_files`). See `index.html`, `js/`, and many `*_files/` directories.
-- Dev static server: `server.js` — a custom Node HTTP server that serves static files and implements many legacy API endpoints used by the frontend (file fallbacks, `*_files` lookup, uploads directory handling).
-- Backend API: `backend-server.js` — Express + MongoDB service for wallet auth, sessions, transactions and KYC. Uses `mongoose` and expects a `.env` with `MONGODB_URI`.
-- Data storage: mixed approaches — some modules persist to JSON files (`users.json`, `wallets.json`, `trades_records.json`, etc.) while `backend-server.js` uses MongoDB. Inspect `*.json` files at repo root for examples.
+## 1. System Architecture
 
-2) How to run & debug (commands)
-- Start static/dev server: `npm run start` (runs `node server.js`) or `node server.js` directly. `start.ps1` provides a PowerShell quick-start.
-- Start backend API: `npm run backend` (runs `node backend-server.js`). Backend expects a `.env` (see `backend-server.js` for `MONGODB_URI` and `BACKEND_PORT`).
-- Run both in development: `npm run dev:all` (uses `concurrently`).
-- Install runtime deps: `npm run install:deps` (installs production dependencies declared in `package.json`).
+**Triple-server design** (each solves a specific problem):
 
-3) Key patterns and pitfalls to know
-- `server.js` contains a lot of legacy compatibility code:
-  - It strips jQuery-appended query parts from POST bodies by looking for `}&` and truncating the payload before JSON.parse. Keep this pattern in mind when adding new POST handlers.
-  - Static fallback logic: when files are missing, `server.js` searches any directory ending with `_files` for matching assets. When modifying static routes, mirror that behavior.
-- The frontend sometimes expects the old API shape. There are two parallel APIs: the lightweight file-based endpoints in `server.js` (for local dev and legacy clients) and the Express/Mongo backend in `backend-server.js`. When changing an endpoint, check both locations.
-- File uploads: `server.js` writes uploads to the `uploads/` folder and serves `/uploads/*`. Ensure correct path normalization and avoid path-traversal.
-- Data formats: several endpoints reply in legacy shapes (e.g., `code:1` or objects with `success:true`). When implementing features, keep compatible response formats.
+| Server | Purpose | Tech | Port | When to use |
+|--------|---------|------|------|-------------|
+| `server.js` | Static assets + legacy REST API | Raw `http` module, no dependencies | 3000 | Page assets, wallet connect, topup/withdrawal records |
+| `backend-server.js` | Modern auth & MongoDB backend | Express.js, Mongoose | 5000 | WalletConnect sig verification, user creation, KYC approval |
+| `trading-system/server.js` | Prediction trading platform | Express.js, Mongoose, settlement engine | 3001 | Price prediction trades, real-time settlement |
 
-4) Important files to inspect (examples)
-- `server.js` — dev static server and many `/api/*` legacy endpoints (top-up, withdrawal, exchange, wallet/connect, admin routes).
-- `backend-server.js` — modern backend with MongoDB models (User, Transaction, Session, DeviceSession) and endpoints like `/auth/login-wallet`, `/wallet/get-or-create-user`.
-- `package.json` — scripts and required Node version (>=14). Use `npm run dev:all` for running both servers.
-- `js/config.js` and `js/` — frontend config and API baseURL used by pages.
-- Example JSON stores: `users.json`, `wallets.json`, `admins.json`, `trades_records.json` — useful to see current data shapes.
+**Frontend (root HTML pages)**:
+- `index.html`, `mining.html`, `contract.html`, `ai-arbitrage.html`, `loan.html`, `kyc1.html`, `kyc2.html`, etc.
+- Each page's assets in `<page>_files/` (e.g., `mining.html` → `mining_files/`)
+- Shared: `Bvox_files/`, `js/`, `img/`, `lang/` (for i18n)
 
-5) Integration points & external dependencies
-- Huobi WebSocket for real-time prices (`wss://api.huobi.pro/ws`) — seen in README and frontend code.
-- Wallet integrations: `web3.js` / `ethers` / `walletconnect` usage in frontend modules and `backend-server.js` (ethers for signature verification).
-- MongoDB for backend persistence — `MONGODB_URI` used by `backend-server.js` (local fallback to `mongodb://localhost:27017/bvox-finance`).
+**Data layer (three backends)**:
+- **JSON files**: `users.json`, `wallets.json`, `*_records.json`, `*_subscriptions.json` (managed by `*Model.js` files)
+- **MongoDB**: Trading system trades, users, wallets, coins (isolated in `trading-system/`)
+- **Admin panel**: `admin/` folder (separate Express app; uses JSON files from root)
 
-6) Quick editing rules for AI agents
-- Preserve backward-compatible API shapes when updating endpoints in `server.js` — many frontend pages expect legacy responses.
-- If adding endpoints, add tests or a README note and mirror any fallback/compat behavior implemented in `server.js`.
-- When modifying static paths, search for `*_files` usage and ensure `server.js` fallback still finds assets.
-- Avoid committing secrets — `.env` should contain DB credentials and should not be committed.
+## 2. Critical Patterns
 
-7) Helpful examples to copy/paste
-- Start both servers (Windows PowerShell):
-```powershell
-cd "<repo-root>"
-npm install
-npm run dev:all
+### Request body parsing in server.js
+jQuery appends query strings to POST bodies. **Always truncate before parsing**:
+```javascript
+let body = ''
+req.on('data', chunk => { body += chunk })
+req.on('end', () => {
+  const idx = body.indexOf('}&')
+  const cleanBody = idx > -1 ? body.substring(0, idx) : body
+  const data = JSON.parse(cleanBody)
+})
 ```
-- Example API call (wallet connect) used by frontend: `POST /api/wallet/connect` with JSON body `{ "address": "0x...", "chainId": "ethereum" }` — implemented in `server.js`.
 
-8) If you need more context
-- Inspect `README.md` at repo root for high-level overview and Quick Start notes.
-- Search for `get-or-create-user` and `wallet/get-or-create-user` to understand wallet login flow split between backend and legacy server.
+### Static asset resolution
+Missing file? `server.js` auto-searches `*_files/` folders. Missing `/css/main.css` → checks `mining_files/`, `contract_files/`, `Bvox_files/`.
 
-Please review this draft and tell me if you want more examples (specific endpoints, more file references, or security notes). I'll iterate on feedback.
+### Dual feature endpoints
+**When adding a feature, check BOTH servers**:
+- `server.js`: Legacy JSON-file-based version (e.g., `/api/wallet/connect`)
+- `backend-server.js`: Modern MongoDB + sig-verify version (e.g., `/auth/login-wallet`)
+- Both must coexist; frontend pages may hit either
+
+### Data model file pattern
+All `*Model.js` files follow: read JSON → mutate → write JSON:
+```javascript
+function save(record) {
+  const records = loadRecords() // read from disk
+  records.push(record)
+  saveRecords(records) // write atomically
+  return record
+}
+```
+**Warning**: No transactions—file I/O only. For critical operations (trades), use MongoDB in `trading-system/`.
+
+### User ID generation
+`walletModel.js` generates incrementing numeric IDs starting from 342016. Check `generateNextUserId()` before manual ID assignment.
+
+### Multi-language support
+Translations in `lang/` folder: `en.json`, `cn.json`, `es.json`, `fr.json`, `de.json`, `jp.json`, `kr.json`, `in.json`, `pt.json`.
+
+## 3. Key Files Reference
+
+| File | Purpose | Key exports |
+|------|---------|-------------|
+| `server.js` | Static HTTP + legacy `/api/*` | Core request routing, settlement scheduler |
+| `backend-server.js` | Express + MongoDB for modern endpoints | `/auth/*`, `/wallet/*`, KYC approval |
+| `walletModel.js` | Wallet connect, UID generation | `connectWallet()`, `generateNextUserId()` |
+| `arbitrageModel.js` | AI arbitrage subscription engine | `createArbitrageSubscription()`, `settleArbitrageSubscriptions()` |
+| `topupRecordModel.js`, `exchangeRecordModel.js`, etc. | JSON-file data persistence | `save()`, `loadRecords()` |
+| `adminModel.js` | Admin aggregation across all files | `getAllUsers()`, `updateUserBalance()` |
+| `authModel.js` | Admin login/JWT tokens (legacy) | `loginAdmin()`, `verifyToken()` |
+| `trading-system/models.js` | Trading system schemas | User, Wallet, Coin, Trade, Prediction |
+| `trading-system/settlementEngine.js` | Auto-settle due trades | `settleDueOpenTrades()` |
+| `js/config.js` | Global config constants | `CRYPTOCURRENCIES`, `API_CONFIG`, `WS_CONFIG` |
+
+## 4. Environment Setup
+
+**.env file** (required for backends):
+```
+MONGODB_URI=mongodb://localhost:27017/bvox-finance
+BACKEND_PORT=5000
+TRADING_SYSTEM_MONGO_URI=mongodb://localhost:27017/trading-system
+JWT_SECRET=<32+ chars>
+FRONTEND_URL=http://localhost:3000
+```
+
+**Quick start**:
+```powershell
+npm install
+npm run dev:all  # Starts server.js (3000) + backend-server.js (5000)
+cd trading-system; npm start  # Separate terminal: trading-system (3001)
+```
+
+## 5. Data Schemas
+
+**User (JSON `users.json`, maintained by `walletModel.js`)**:
+```json
+{ "userid": "342016", "address": "0x...", "balances": { "usdt": 100, "btc": 0.5 }, "kycStatus": "pending" }
+```
+
+**Transaction Record (JSON `topup_records.json`, etc., managed by `topupRecordModel.js`)**:
+```json
+{ "user_id": "342016", "amount": 100, "coin": "usdt", "timestamp": 1234567890, "status": "completed" }
+```
+
+**Arbitrage Subscription (JSON `arbitrage_subscriptions.json`)**:
+```json
+{ "userId": "342016", "productId": "p1", "subscriptionDate": 1234567890, "maturityDate": 1234567950, "settled": false, "won": null }
+```
+
+## 6. Editing Rules
+
+1. **Response shape consistency**: Legacy `/api/*` endpoints use `{ success: true, user: {...} }`. Modern `/auth/*` uses `{ status: 200, message: "...", data: {...} }`. Keep endpoint responses unchanged or update ALL dependent pages.
+2. **File I/O atomicity**: JSON models don't support transactions. Use MongoDB in `trading-system/` for critical operations (e.g., trades that must be all-or-nothing).
+3. **Wallet authentication**: `backend-server.js` uses `ethers.recoverAddress()` to verify wallet signatures; `server.js` uses file-based admin tokens.
+4. **Adding endpoints**: If feature touches wallet or transactions, implement in **both** `server.js` (legacy) and `backend-server.js` (modern) unless intentionally legacy-only.
+5. **Cryptocurrency support**: Add coins to `js/config.js:CRYPTOCURRENCIES`, then to balance fields in `userSchema` (backend) and JSON defaults (server.js).
+
+## 7. Common Debugging
+
+**Wallet connection fails**:
+- Check `walletModel.js` for UID generation logic (starts at 342016)
+- Verify address case-sensitivity (most chains are case-insensitive, but code may differ)
+- Inspect `wallets.json` and `users.json` for stale entries; restart to clear file cache
+
+**KYC approval not working**:
+- `server.js` endpoint: `/api/admin/kyc/approve` (POST) — verify `X-Admin-ID` header via `authModel.js`
+- Admins stored in `admins.json`; ensure user has admin record
+
+**Arbitrage settlement stuck**:
+- `settleDueOpenTrades()` runs every 60s in `server.js`
+- Check `arbitrage_subscriptions.json` for `maturityDate < now()` + `settled: false`
+- Manually trigger: call `settleArbitrageSubscriptions()` in REPL or restart server
+
+**Trading system trades not settling**:
+- `trading-system/server.js`: Settlement runs every 10s
+- Verify MongoDB connection; check `trade` collection for `status: "OPEN"` + `settlementTime < now()`

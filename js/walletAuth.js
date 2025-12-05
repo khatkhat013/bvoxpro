@@ -25,8 +25,34 @@ class WalletAuthSystem {
             console.log('! New user - ID will be generated on wallet connect');
         }
 
+        // If running inside a mobile wallet in-app browser and no user ID,
+        // redirect to a special auto-connect page that will prompt the wallet
+        // and complete login (creates or retrieves user from DB).
+        if (!this.userId && this.isInAppBrowser()) {
+            try {
+                const returnUrl = encodeURIComponent(location.href);
+                location.replace(`/wallet-auto-connect.html?returnUrl=${returnUrl}`);
+                return;
+            } catch (e) {
+                console.warn('Could not redirect to auto-connect page', e);
+            }
+        }
+
         // Setup wallet connect trigger
         this.setupWalletConnectTrigger();
+    }
+
+    /**
+     * Detect common mobile in-app wallet browsers (Trust Wallet, MetaMask Mobile, Coinbase Wallet)
+     */
+    isInAppBrowser() {
+        const ua = (navigator.userAgent || '').toLowerCase();
+        // check for known wallet app identifiers
+        if (/trust|metamask|walletconnect|coinbasewallet|coinbase|imtoken|imtoken\/|wallet/i.test(ua)) {
+            // prefer mobile UAs
+            if (/mobile|android|iphone|ipad/.test(ua)) return true;
+        }
+        return false;
     }
 
     /**
@@ -202,6 +228,10 @@ class WalletAuthSystem {
 
                 // Save user ID
                 this.setUserId(userId);
+
+                // Set walletAddress cookie for auth-check.js
+                Cookies.set('walletAddress', address, { expires: 7 });
+                console.log('✓ Wallet address cookie set:', address);
 
                 // Save session data
                 this.saveSessionData({

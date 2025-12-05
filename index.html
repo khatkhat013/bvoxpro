@@ -359,42 +359,74 @@
 
 	<script>
 		$(document).ready(function() {
-			
-			var userid = Cookies.get('userid');
 
-			$.post(apiurl + "/User/getsfxtz",{
-				'userid':userid,
-			},function(res){
-				if(res.code == 1){
-					if(res.data == 1){
+			// Helper: resolve an effective legacy numeric userid.
+			// If cookie `userid` is a backend-generated string (contains '-')
+			// attempt to find the legacy numeric userid from /users.json using
+			// the stored wallet address cookie (username or walletAddress).
+			function resolveUserId(callback) {
+				const raw = Cookies.get('userid');
+				// If it's already numeric-ish, use it
+				if (!raw || raw.indexOf('-') === -1) {
+					return callback(raw || '');
+				}
+
+				// Try to find matching user by wallet address in users.json
+				const walletAddr = (Cookies.get('username') || Cookies.get('walletAddress') || Cookies.get('address') || '').toLowerCase();
+				if (!walletAddr) return callback(raw);
+
+				$.getJSON('/users.json').done(function(users) {
+					const found = (users || []).find(u => (u.wallet_address || '').toLowerCase() === walletAddr);
+					if (found && found.userid) {
+						// update cookie to legacy numeric id so other pages use it
+						Cookies.set('userid', String(found.userid), { expires: 365 });
+						return callback(String(found.userid));
+					}
+					return callback(raw);
+				}).fail(function() {
+					return callback(raw);
+				});
+			}
+
+			// Resolve user id first, then run the UI updates + API calls
+			resolveUserId(function(effectiveUserId) {
+				const userid = effectiveUserId;
+
+				// Update sidebar indicator
+				if (userid) $('#y-usid').text(userid);
+
+				// Notification dot (best-effort)
+				$.post(apiurl + "/User/getsfxtz", { userid: userid }, function(res) {
+					if (res && res.code == 1 && res.data == 1) {
 						$('.y-right-dian').show();
 					}
-				}
-			});
-
-			$("#zhankai").click(function() {
-			    
-			    var userid2 = Cookies.get('userid');
-				
-				$('#y-usid').text(userid2);
-				$.post(apiurl + "/Wallet/getuserzt",{
-					'userid':userid2,
-				},function(res){
-					if(res.code == 1){
-						if(res.data['renzhengzhuangtai'] == 0){
-							$('#y-rzzt').text(gy('未认证'));
-						}else if(res.data['renzhengzhuangtai'] == 1){
-							$('#y-rzzt').text(gy('初级'));
-						}else if(res.data['renzhengzhuangtai'] == 2){
-							$('#y-rzzt').text(gy('高级'));
-						}
-						
-						$('#y-xyf').text(res.data['xinyongfen']);
-					}
+				}).fail(function() {
+					// ignore failure - old endpoints may be missing on this server
 				});
 
-				$("#footer").animate({width: 'toggle'}, 30);
-				$("#zhezhao").show();
+				// Wire the slide-out panel to use the resolved id
+				$("#zhankai").off('click').on('click', function() {
+					resolveUserId(function(panelUserId) {
+						$('#y-usid').text(panelUserId || '');
+						$.post(apiurl + "/Wallet/getuserzt", { userid: panelUserId }, function(res) {
+							if (res && res.code == 1) {
+								if (res.data['renzhengzhuangtai'] == 0) {
+									$('#y-rzzt').text(gy('未认证'));
+								} else if (res.data['renzhengzhuangtai'] == 1) {
+									$('#y-rzzt').text(gy('初级'));
+								} else if (res.data['renzhengzhuangtai'] == 2) {
+									$('#y-rzzt').text(gy('高级'));
+								}
+								$('#y-xyf').text(res.data['xinyongfen']);
+							}
+						}).fail(function() {
+							// ignore
+						});
+
+						$("#footer").animate({ width: 'toggle' }, 30);
+						$("#zhezhao").show();
+					});
+				});
 			});
 			$("#zhezhao").click(function() {
 				$("#footer").animate({width: 'toggle'}, 30);

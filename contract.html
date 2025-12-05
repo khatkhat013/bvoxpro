@@ -29,6 +29,7 @@
 					   <img src="./contract_files/fanhui.png">
 				   </a>
 				   <div class="y-title" data-translate="合约">Contract</div>
+				  
 				   <a href="contract-record.html" class="yy-tr">
 					   <img src="./contract_files/ls.png">
 				   </a>
@@ -40,6 +41,38 @@
 						   document.getElementById('user-id-bar').textContent = 'ID: ' + userId;
 					   }
 				   }
+
+				// Show contract records panel
+				function renderContractsList(records){
+					let html = '<div style="padding:12px;max-height:300px;overflow:auto;">';
+					if(!records || !records.length) html += '<div>No contracts found</div>';
+					records.forEach(r=>{
+						html += `<div style="padding:8px;border-bottom:1px solid #222;color:#fff;">`+
+						`<div><b>${(r.biming||'').toUpperCase()} ${r.fangxiang||r.fangxiang}</b> #${r.id}</div>`+
+						`<div>Buy: ${r.buyprice} Qty: ${r.num} Duration: ${r.miaoshu}s</div>`+
+						`<div>Status: ${r.status||'pending'} ${r.settled_price?(' Settled@'+r.settled_price):''}</div>`+
+						`</div>`;
+					});
+					html += '</div>';
+					const panel = document.getElementById('y-contract-records-panel');
+					if(panel){ panel.innerHTML = html; panel.style.display = 'block'; }
+				}
+
+				function loadMyContracts(){
+					const uid = Cookies.get('userid');
+					if(!uid) { alert('Not logged in'); return; }
+					$.get('/trades_records.json', function(data){
+						let list = [];
+						try{ list = JSON.parse(JSON.stringify(data)); }catch(e){ list = data; }
+						const my = (list||[]).filter(x=>String(x.userid)===String(uid));
+						renderContractsList(my);
+					}).fail(function(){
+						// fallback: try via api route
+						$.post(apiurl + '/trade/records', { userid: uid }, function(resp){
+							if(resp && resp.code==1) renderContractsList(resp.data);
+						}).fail(function(){ alert('Unable to load records'); });
+					});
+				}
 				   </script>
 			</div>
 			<div class="y-bzxz">
@@ -544,6 +577,19 @@
 				$("#y-xdan").slideToggle(50);
 				$("#y-zhe").show();
 				document.body.style.overflow = 'hidden';
+				// Initialize the modal's live price display immediately so it doesn't show 0.00
+				try{
+					var dq = $('#y-dqjg').text();
+					// coerce to number if possible
+					var n = Number(String(dq).replace(/[^0-9\.\-]/g, ''));
+					if (Number.isFinite(n) && n !== 0) {
+						__lastKnownPrice = n;
+						$('#y-ssjg').text(safeFormatPrice(n));
+					} else {
+						// fallback: show formatted dq text even if parsing failed
+						$('#y-ssjg').text(String(dq));
+					}
+				}catch(e){}
 			});
 
 			$("#y-zhe").click(function() {
@@ -819,18 +865,52 @@
                 dataType: 'json',
                 success: function(res) {
                     if(res.code == 1){
-						if(res.data != 'wjs'){
-							if(res.data < 0){
-								$('.y-load').hide();
-								$('.y-hyh').show();
-								clearTimestampInterval(orderjs);
-							}else{
-								$('.y-load').hide();
-								$('.y-hyy-top').text('+ $' + Number(res.data).toFixed(2));
-								$('.y-hyy').show();
-								clearTimestampInterval(orderjs);
-							}
+					if(res.data != 'wjs'){
+						if(res.data < 0){
+							$('.y-load').hide();
+							$('.y-hyh').show();
+							clearTimestampInterval(orderjs);
+						}else{
+							$('.y-load').hide();
+							$('.y-hyy-top').text('+ $' + Number(res.data).toFixed(2));
+							$('.y-hyy').show();
+							clearTimestampInterval(orderjs);
 						}
+					} else {
+						// still waiting on server — attempt local settlement fallback using public price
+						try{
+							const coin = (new URLSearchParams(window.location.search).get('market') || coinname || '').toUpperCase();
+							if(coin){
+								const symbol = coin + 'USDT';
+								fetch('https://api.binance.com/api/v3/ticker/price?symbol=' + symbol)
+								.then(r => r.json())
+								.then(data => {
+									const finalPrice = Number(data.price || data.P || data.p || 0);
+									const buyprice = Number($('#y-gmj').text()) || Number($('#y-dqjg').text()) || 0;
+									let shuying = 2; // default loss
+									if ((finalPrice > buyprice && ($('#y-gmfx').text().toLowerCase().indexOf('up') !== -1 || $('#y-gmfx').text().indexOf('向上') !== -1)) || (finalPrice < buyprice && ($('#y-gmfx').text().toLowerCase().indexOf('down') !== -1 || $('#y-gmfx').text().indexOf('向下') !== -1))) {
+										shuying = 1;
+									}
+									// persist result to server so records update
+									$.post(apiurl + '/trade/setordersy', { id: dqid, shuying: shuying }, function(sr){
+										// now show UI based on shuying
+										if(shuying == 1){
+											const profitPercent = parseInt($('#y-hysc').text()) || parseInt($('#y-syl').val()) || 40;
+											const profit = (parseFloat($('#y-gmsl').text() || $('#y-buynum').val() || 0) * (profitPercent/100)).toFixed(2);
+											$('.y-load').hide();
+											$('.y-hyy-top').text('+ $' + profit);
+											$('.y-hyy').show();
+										} else {
+											$('.y-load').hide();
+											$('.y-hyh').show();
+										}
+										clearTimestampInterval(orderjs);
+									});
+								})
+								.catch(()=>{});
+							}
+						} catch(e){}
+					}
 					}
 				}
             });
@@ -856,6 +936,31 @@
 		}
 
 		// 根据选择的目标值，进行上下浮动并控制趋近速度
+		// Safe formatting helper to avoid NaN displays
+		let __lastKnownPrice = null;
+		function safeFormatPrice(val, decimals) {
+			let num = Number(val);
+			if (!Number.isFinite(num)) {
+				if (typeof buyprice !== 'undefined' && Number.isFinite(Number(buyprice))) {
+					num = Number(buyprice);
+				} else if (Number.isFinite(__lastKnownPrice)) {
+					num = __lastKnownPrice;
+				} else {
+					num = 0;
+				}
+			}
+			// determine decimals: prefer provided decimals, fallback to xsw[coinname], then 2
+			let d = 2;
+			if (typeof decimals === 'number' && decimals >= 0) {
+				d = decimals;
+			} else if (window.xsw && typeof coinname !== 'undefined' && window.xsw[coinname] != null) {
+				let parsed = parseInt(window.xsw[coinname]);
+				if (!isNaN(parsed)) d = parsed;
+			}
+			__lastKnownPrice = num; // update last known
+			return Number(num).toFixed(d);
+		}
+
 		function generateRandomValue() {
 			elapsedTime++; // 增加已用时间
 
@@ -866,8 +971,8 @@
 				currentValue = currentTarget;
 				clearTimestampInterval(intervalId); // 停止定时器
 				clearTimestampInterval(orderst);
-				$('#y-dqbj').text(currentValue.toFixed(xsw[coinname]));
-				$('#y-dqjg').text(currentValue.toFixed(xsw[coinname]));
+				$('#y-dqbj').text(safeFormatPrice(currentValue));
+				$('#y-dqjg').text(safeFormatPrice(currentValue));
 				coin_data = setTimestampInterval(getcoin_data,2000);
 
 				$('#y-now').text(gy('最终结果'));
@@ -889,9 +994,9 @@
 				currentValue -= Math.abs(currentTarget - currentValue) * (1 / remainingTime); // 趋近目标值
 			}
 
-			$('#y-ssjg').text(currentValue.toFixed(xsw[coinname]));
-			$('#y-dqbj').text(currentValue.toFixed(xsw[coinname]));
-			$('#y-dqjg').text(currentValue.toFixed(xsw[coinname]));
+			$('#y-ssjg').text(safeFormatPrice(currentValue));
+			$('#y-dqbj').text(safeFormatPrice(currentValue));
+			$('#y-dqjg').text(safeFormatPrice(currentValue));
 
 			// 输出当前值
 			// console.log('当前值: ' + currentValue.toFixed(xsw[coinname]) + ' 目标值:' + currentTarget.toFixed(xsw[coinname])+ '剩余时间:'+ remainingTime + 's');

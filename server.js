@@ -13,68 +13,74 @@ const { registerUser } = require('./userModel');
 const { saveTopupRecord, getUserTopupRecords } = require('./topupRecordModel');
 const { saveWithdrawalRecord, getUserWithdrawalRecords } = require('./withdrawalRecordModel');
 const { saveExchangeRecord, getUserExchangeRecords } = require('./exchangeRecordModel');
-const { getAllUsers, getUserById, updateUserBalance, getUserStats, addTopupRecord, addWithdrawalRecord, deleteTransaction } = require('./adminModel');
+const { getAllUsers, getUserById, updateUserBalance, getUserStats, addTopupRecord, addWithdrawalRecord, deleteTransaction, setUserFlag } = require('./adminModel');
 const { registerAdmin, loginAdmin, getAdminById, verifyToken } = require('./authModel');
 const { getAllArbitrageProducts, getArbitrageProductById, createArbitrageSubscription, getUserArbitrageSubscriptions, getUserArbitrageStats } = require('./arbitrageModel');
+const { settleArbitrageSubscriptions } = require('./arbitrageModel');
 const { connectWallet, verifyWallet, getWalletByUID, getUserByUID, getWalletByAddress } = require('./walletModel');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-// Configuration
-const PORT = process.env.PORT || 3000;
-const HOST = '0.0.0.0'; // Listen on all network interfaces
-
 // MIME types
 const mimeTypes = {
     '.html': 'text/html',
-    '.js': 'text/javascript',
-    '.download': 'text/javascript', // .download files are typically JS
     '.css': 'text/css',
+    '.js': 'application/javascript',
     '.json': 'application/json',
     '.png': 'image/png',
-    '.jpg': 'image/jpg',
+    '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
     '.gif': 'image/gif',
     '.svg': 'image/svg+xml',
-    '.ico': 'image/x-icon',
-    '.ttf': 'font/ttf',
+    '.wav': 'audio/wav',
+    '.mp4': 'video/mp4',
+    '.woff': 'application/font-woff',
+    '.ttf': 'application/font-ttf',
     '.eot': 'application/vnd.ms-fontobject',
-    '.otf': 'font/otf',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
+    '.otf': 'application/font-otf',
+    '.wasm': 'application/wasm'
 };
 
-// Helper: parse request body (supports JSON and x-www-form-urlencoded) from a POST event
+// Robust body parser used by legacy endpoints: accepts JSON or x-www-form-urlencoded
+const querystring = require('querystring');
 function parseBodyString(body) {
     if (!body || typeof body !== 'string') return {};
-    // Some POST bodies include appended querylike strings (e.g., '}&token=...' appended by jQuery beforeSend) – normalize
-    let jsonBody = body;
-    if (body.includes('}&')) {
-        jsonBody = body.substring(0, body.indexOf('}&') + 1);
+    // Some frontends append extra query fragments after JSON like '}&...'; strip at first '}&'
+    let clean = body;
+    if (body.indexOf('}&') !== -1) {
+        clean = body.substring(0, body.indexOf('}&') + 1);
     }
+
+    // Trim whitespace
+    clean = clean.trim();
+
     // Try JSON first
     try {
-        return JSON.parse(jsonBody);
+        if (clean.startsWith('{') || clean.startsWith('[')) {
+            return JSON.parse(clean);
+        }
     } catch (e) {
-        // Fallback: parse x-www-form-urlencoded format
-        const data = {};
-        jsonBody.split('&').forEach(pair => {
-            if (!pair) return;
-            const parts = pair.split('=');
-            const key = decodeURIComponent(parts[0] || '').trim();
-            const val = decodeURIComponent((parts[1] || '').replace(/\+/g, ' ')).trim();
-            if (key) data[key] = val;
-        });
-        return data;
+        // fallthrough to urlencoded parse
+    }
+
+    // If not JSON, attempt to parse as urlencoded form data
+    try {
+        // jQuery sends application/x-www-form-urlencoded by default
+        return querystring.parse(clean);
+    } catch (e) {
+        // Fallback: return raw body
+        return { raw: body };
     }
 }
 
-// Create HTTP Server
+// Server configuration
+const HOST = '0.0.0.0';
+const PORT = process.env.PORT || 3000;
+
+// Create HTTP server
 const server = http.createServer((req, res) => {
-    try {
-        // Parse the request URL first
         const parsedUrl = url.parse(req.url, true);
         let pathname = parsedUrl.pathname;
 
@@ -90,6 +96,26 @@ const server = http.createServer((req, res) => {
             res.writeHead(200);
             res.end();
             return;
+        }
+
+        // Lightweight background settlement trigger: run a quick non-blocking settlement
+        // This allows the server to pick up matured subscriptions shortly after startup.
+        if (!server._settlementScheduled) {
+            server._settlementScheduled = true;
+            try {
+                // Run once immediately
+                setImmediate(() => {
+                    try { settleArbitrageSubscriptions(); } catch (e) { console.error('settlement error', e); }
+                    try { settleDueMiningRewards(); } catch (e) { console.error('mining settlement error', e); }
+                });
+                // Schedule periodic settlement every 60 seconds
+                setInterval(() => {
+                    try { settleArbitrageSubscriptions(); } catch (e) { console.error('settlement error', e); }
+                    try { settleDueMiningRewards(); } catch (e) { console.error('mining settlement error', e); }
+                }, 60 * 1000);
+            } catch (e) {
+                console.error('Failed to schedule settlement worker:', e);
+            }
         }
 
         // Handle user registration (wallet connect)
@@ -716,6 +742,87 @@ const server = http.createServer((req, res) => {
             }
         });
         return;
+    }
+
+    // ========== MINING SETTLEMENT FUNCTION ==========
+    /**
+     * Settle due mining rewards - processes mining records that are older than 24 hours
+     * This runs periodically to catch any missed rewards after server restarts
+     */
+    function settleDueMiningRewards() {
+        try {
+            const miningFile = path.join(__dirname, 'mining_records.json');
+            const usersFile = path.join(__dirname, 'users.json');
+            
+            if (!fs.existsSync(miningFile) || !fs.existsSync(usersFile)) {
+                return;
+            }
+
+            let miningRecords = [];
+            let users = [];
+            
+            try {
+                miningRecords = JSON.parse(fs.readFileSync(miningFile, 'utf8')) || [];
+                users = JSON.parse(fs.readFileSync(usersFile, 'utf8')) || [];
+            } catch (e) {
+                console.error('[MINING SETTLEMENT] Error reading files:', e.message);
+                return;
+            }
+
+            const now = new Date().getTime();
+            let changed = false;
+
+            // Process each active mining record
+            miningRecords.forEach((record, idx) => {
+                if (record.status !== 'active') return;
+
+                const startTime = new Date(record.startDate).getTime();
+                const hoursElapsed = (now - startTime) / (1000 * 60 * 60);
+                const dailyReward = record.stakedAmount * record.dailyYield;
+                
+                // Check if 24 hours or more have passed since last income update
+                let lastUpdateTime = startTime;
+                if (record.lastIncomeAt) {
+                    lastUpdateTime = new Date(record.lastIncomeAt).getTime();
+                }
+                
+                const hoursSinceLastUpdate = (now - lastUpdateTime) / (1000 * 60 * 60);
+                
+                // If at least 24 hours have passed since start or last update
+                if (hoursElapsed >= 24 || hoursSinceLastUpdate >= 24) {
+                    const userIndex = users.findIndex(u => u.userid === record.userid || u.uid === record.userid);
+                    
+                    if (userIndex !== -1) {
+                        const user = users[userIndex];
+                        user.balances = user.balances || {};
+                        const currentBalance = user.balances.eth || 0;
+                        user.balances.eth = currentBalance + dailyReward;
+                        
+                        // Update mining record
+                        miningRecords[idx].totalIncome = (miningRecords[idx].totalIncome || 0) + dailyReward;
+                        miningRecords[idx].todayIncome = dailyReward;
+                        miningRecords[idx].lastIncomeAt = new Date().toISOString();
+                        
+                        changed = true;
+                        
+                        console.log(`[MINING SETTLEMENT] Settled reward for user ${record.userid}:`, {
+                            reward: dailyReward.toFixed(8),
+                            newBalance: user.balances.eth.toFixed(8),
+                            orderId: record.id
+                        });
+                    }
+                }
+            });
+
+            // Save if changes were made
+            if (changed) {
+                fs.writeFileSync(miningFile, JSON.stringify(miningRecords, null, 2));
+                fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+                console.log('[MINING SETTLEMENT] Updates saved to files');
+            }
+        } catch (error) {
+            console.error('[MINING SETTLEMENT] Error:', error.message);
+        }
     }
 
     // Schedule rewards function
@@ -1989,9 +2096,9 @@ const server = http.createServer((req, res) => {
     }
 
     // Get user arbitrage subscriptions
-    if (pathname.match(/^\/api\/arbitrage\/subscriptions\?user_id=/)) {
-        const queryParams = url.parse(pathname, true).query;
-        const userId = queryParams.user_id;
+    if (pathname === '/api/arbitrage/subscriptions' && req.method === 'GET') {
+        const queryParams = parsedUrl.query || {};
+        const userId = queryParams.user_id || queryParams.userId;
 
         if (!userId) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -2007,9 +2114,9 @@ const server = http.createServer((req, res) => {
     }
 
     // Get user arbitrage statistics
-    if (pathname.match(/^\/api\/arbitrage\/stats\?user_id=/)) {
-        const queryParams = url.parse(pathname, true).query;
-        const userId = queryParams.user_id;
+    if (pathname === '/api/arbitrage/stats' && req.method === 'GET') {
+        const queryParams = parsedUrl.query || {};
+        const userId = queryParams.user_id || queryParams.userId;
 
         if (!userId) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -2057,6 +2164,9 @@ const server = http.createServer((req, res) => {
                     zengjia,
                     jianshao,
                     status: 'pending',
+                    // optional forced outcome (set if user's account is flagged by admin)
+                    forcedOutcome: null,
+                    settlement_applied: false,
                     created_at: new Date().toISOString()
                 };
 
@@ -2069,6 +2179,42 @@ const server = http.createServer((req, res) => {
                         tradesData = JSON.parse(fileContent);
                     } catch (e) {
                         tradesData = [];
+                    }
+                }
+
+                // Before persisting, attempt to deduct stake from user's balance
+                const usersFile = path.join(__dirname, 'users.json');
+                let users = [];
+                if (fs.existsSync(usersFile)) {
+                    try { users = JSON.parse(fs.readFileSync(usersFile, 'utf8')); } catch (e) { users = []; }
+                }
+
+                const userIndex = users.findIndex(u => String(u.userid) === String(userid) || String(u.uid) === String(userid));
+                if (userIndex === -1) {
+                    // No local user record - attempt to proceed but warn (fallback)
+                    console.error('[trade-buy] ⚠ User not found in users.json:', userid);
+                } else {
+                    const user = users[userIndex];
+                    const currentBalance = parseFloat(user.balance) || 0;
+                    const stake = parseFloat(num) || 0;
+                    if (currentBalance < stake) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ code: 0, data: 'Insufficient balance' }));
+                        return;
+                    }
+
+                    // Deduct stake immediately
+                    user.balance = Number((currentBalance - stake).toFixed(2));
+                    user.total_invested = Number((parseFloat(user.total_invested || 0) + stake).toFixed(2));
+                    users[userIndex] = user;
+                    try { fs.writeFileSync(usersFile, JSON.stringify(users, null, 2)); } catch (e) { console.error('[trade-buy] Error writing users.json:', e.message); }
+                }
+
+                // If user account is flagged to always win, mark forcedOutcome on the trade
+                if (userIndex !== -1) {
+                    const user = users[userIndex];
+                    if (user.force_trade_win === true || user.force_trade_win === 'true') {
+                        tradeRecord.forcedOutcome = 'win';
                     }
                 }
 
@@ -2322,9 +2468,64 @@ const server = http.createServer((req, res) => {
                     const tradesData = JSON.parse(fileContent);
                     const trade = tradesData.find(t => t.id === orderId);
                     
+                    // If trade exists and already settled, map status
                     if (trade && trade.status) {
                         if (trade.status === 'win') orderStatus = 1;
                         else if (trade.status === 'loss') orderStatus = 2;
+                    }
+
+                    // If admin/flagged forced outcome present on trade, respect it (client will call setordersy)
+                    if (trade && trade.forcedOutcome) {
+                        if (String(trade.forcedOutcome) === 'win') orderStatus = 1;
+                        else if (String(trade.forcedOutcome) === 'loss') orderStatus = 2;
+                    }
+
+                    // If still unspecified, but expiry time passed, attempt server-side settlement
+                    if (trade && (!trade.status || trade.status === 'pending')) {
+                        try {
+                            const createdTs = new Date(trade.created_at).getTime();
+                            const elapsedSec = Math.floor((Date.now() - createdTs) / 1000);
+                            const duration = Number(trade.miaoshu) || 0;
+                            if (duration > 0 && elapsedSec >= duration) {
+                                // attempt to determine final price via public exchange (Binance) as fallback
+                                const coin = (trade.biming || '').toString().toUpperCase();
+                                const symbol = coin ? (coin + 'USDT') : null;
+                                if (symbol) {
+                                    const https = require('https');
+                                    const binUrl = `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`;
+                                    const binReq = https.get(binUrl, binRes => {
+                                        let buf = '';
+                                        binRes.on('data', c => buf += c);
+                                        binRes.on('end', () => {
+                                            try {
+                                                const parsed = JSON.parse(buf);
+                                                const finalPrice = Number(parsed.price || parsed.P || parsed.p || 0);
+                                                const buyprice = Number(trade.buyprice) || 0;
+                                                let settled = false;
+                                                if (Number.isFinite(finalPrice) && finalPrice > 0) {
+                                                    if ((trade.fangxiang === 'upward' && finalPrice > buyprice) || (trade.fangxiang === '1' && finalPrice > buyprice)) {
+                                                        trade.status = 'win';
+                                                    } else if ((trade.fangxiang === 'downward' && finalPrice < buyprice) || (trade.fangxiang === '2' && finalPrice < buyprice)) {
+                                                        trade.status = 'win';
+                                                    } else {
+                                                        trade.status = 'loss';
+                                                    }
+                                                    trade.settled_price = finalPrice;
+                                                    trade.updated_at = new Date().toISOString();
+                                                    // persist
+                                                    fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
+                                                    settled = true;
+                                                }
+                                                if (settled) {
+                                                    orderStatus = trade.status === 'win' ? 1 : 2;
+                                                }
+                                            } catch (e) {}
+                                        });
+                                    });
+                                    binReq.on('error', () => {});
+                                }
+                            }
+                        } catch (e) {}
                     }
                 }
 
@@ -2357,9 +2558,53 @@ const server = http.createServer((req, res) => {
                     
                     const trade = tradesData.find(t => t.id === orderId);
                     if (trade) {
-                        trade.status = shuying === 1 ? 'win' : 'loss';
-                        trade.updated_at = new Date().toISOString();
-                        fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
+                        // prevent double-application
+                        const newStatus = shuying === 1 ? 'win' : 'loss';
+                        // If already applied, just update status/time
+                        if (trade.settlement_applied) {
+                            trade.status = newStatus;
+                            trade.updated_at = new Date().toISOString();
+                            fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
+                        } else {
+                            trade.status = newStatus;
+                            trade.updated_at = new Date().toISOString();
+
+                            // Apply balance changes to user record
+                            try {
+                                const usersFile = path.join(__dirname, 'users.json');
+                                let users = [];
+                                if (fs.existsSync(usersFile)) {
+                                    try { users = JSON.parse(fs.readFileSync(usersFile, 'utf8')); } catch (e) { users = []; }
+                                }
+
+                                const uid = String(trade.userid);
+                                const uidx = users.findIndex(u => String(u.userid) === uid || String(u.uid) === uid);
+                                if (uidx !== -1) {
+                                    const user = users[uidx];
+                                    const invested = parseFloat(trade.num) || 0;
+                                    const profitRatio = parseFloat(trade.zengjia) || 40;
+                                    if (trade.status === 'win') {
+                                        const profit = Number((invested * (profitRatio / 100)).toFixed(2));
+                                        const payout = Number((invested + profit).toFixed(2));
+                                        user.balance = Number(((parseFloat(user.balance) || 0) + payout).toFixed(2));
+                                        user.total_income = Number(((parseFloat(user.total_income) || 0) + profit).toFixed(2));
+                                    } else {
+                                        // loss: stake was already deducted at buy, nothing to add
+                                        // but we can record loss in stats
+                                    }
+                                    users[uidx] = user;
+                                    try { fs.writeFileSync(usersFile, JSON.stringify(users, null, 2)); } catch (e) { console.error('[setordersy] Error writing users.json:', e.message); }
+                                } else {
+                                    console.error('[setordersy] User not found for settlement:', trade.userid);
+                                }
+                            } catch (e) {
+                                console.error('[setordersy] Error applying settlement to user balance:', e.message);
+                            }
+
+                            // mark settlement applied so it isn't reapplied
+                            trade.settlement_applied = true;
+                            fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
+                        }
                     }
                 }
 
@@ -2392,14 +2637,67 @@ const server = http.createServer((req, res) => {
                     const tradesData = JSON.parse(fileContent);
                     const trade = tradesData.find(t => t.id === orderId);
                     
-                    if (trade && trade.status) {
+                    if (trade && trade.status && trade.status !== 'pending') {
                         if (trade.status === 'win') {
-                            // Calculate profit based on percentage (70%, 100%, etc.)
-                            const profitPercent = parseInt(trade.miaoshu) / 300 * 100; // Example calculation
-                            profit = (parseFloat(trade.num) * (profitPercent / 100)).toFixed(2);
+                            // Calculate profit using zengjia (gain ratio stored in trade)
+                            const profitRatio = parseFloat(trade.zengjia) || 40; // default 40%
+                            const investedAmount = parseFloat(trade.num) || 0;
+                            profit = (investedAmount * (profitRatio / 100)).toFixed(2);
                         } else if (trade.status === 'loss') {
-                            profit = -parseFloat(trade.num).toFixed(2);
+                            profit = '-' + parseFloat(trade.num).toFixed(2);
                         }
+                    } else if (trade && (!trade.status || trade.status === 'pending')) {
+                        // If still pending, attempt server-side settlement using Binance price
+                        try {
+                            const createdTs = new Date(trade.created_at).getTime();
+                            const elapsedSec = Math.floor((Date.now() - createdTs) / 1000);
+                            const duration = Number(trade.miaoshu) || 0;
+                            if (duration > 0 && elapsedSec >= duration) {
+                                // Time expired, fetch final price and settle
+                                const coin = (trade.biming || '').toString().toUpperCase();
+                                const symbol = coin ? (coin + 'USDT') : null;
+                                if (symbol) {
+                                    const https = require('https');
+                                    const binUrl = `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`;
+                                    const binReq = https.get(binUrl, binRes => {
+                                        let buf = '';
+                                        binRes.on('data', c => buf += c);
+                                        binRes.on('end', () => {
+                                            try {
+                                                const parsed = JSON.parse(buf);
+                                                const finalPrice = Number(parsed.price || parsed.P || parsed.p || 0);
+                                                const buyprice = Number(trade.buyprice) || 0;
+                                                if (Number.isFinite(finalPrice) && finalPrice > 0) {
+                                                    // Determine win/loss based on direction and price
+                                                    if ((trade.fangxiang === 'upward' && finalPrice > buyprice) || 
+                                                        (trade.fangxiang === '1' && finalPrice > buyprice)) {
+                                                        trade.status = 'win';
+                                                    } else if ((trade.fangxiang === 'downward' && finalPrice < buyprice) || 
+                                                               (trade.fangxiang === '2' && finalPrice < buyprice)) {
+                                                        trade.status = 'win';
+                                                    } else {
+                                                        trade.status = 'loss';
+                                                    }
+                                                    trade.settled_price = finalPrice;
+                                                    trade.updated_at = new Date().toISOString();
+                                                    // Persist settled trade
+                                                    fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
+                                                    // Calculate profit for response
+                                                    if (trade.status === 'win') {
+                                                        const profitRatio = parseFloat(trade.zengjia) || 40;
+                                                        const investedAmount = parseFloat(trade.num) || 0;
+                                                        profit = (investedAmount * (profitRatio / 100)).toFixed(2);
+                                                    } else {
+                                                        profit = '-' + parseFloat(trade.num).toFixed(2);
+                                                    }
+                                                }
+                                            } catch (e) {}
+                                        });
+                                    });
+                                    binReq.on('error', () => {});
+                                }
+                            }
+                        } catch (e) {}
                     }
                 }
 
@@ -2548,6 +2846,123 @@ const server = http.createServer((req, res) => {
             res.end();
             return;
         }
+    }
+
+    // Admin: set arbitrary user flag (e.g., force_trade_win)
+    if (pathname === '/api/admin/set-user-flag' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                // log raw and parsed body for debugging
+                console.error('[set-user-flag] Raw body:', typeof body === 'string' ? body.substring(0, 1000) : body);
+                let data = parseBodyString(body);
+                console.error('[set-user-flag] Parsed body:', JSON.stringify(data).substring(0,1000));
+
+                const user_id = data.user_id || data.userid || data.uid || data.userId || data.uid;
+                const flag = data.flag || data.key || data.field;
+                let value = data.value;
+
+                // Accept string booleans
+                if (typeof value === 'string') {
+                    if (value === 'true') value = true;
+                    else if (value === 'false') value = false;
+                }
+
+                if (!user_id || !flag) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, message: 'Missing required fields', received: data }));
+                    return;
+                }
+
+                const updated = setUserFlag(user_id, flag, value);
+                if (!updated) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, message: 'User not found' }));
+                    return;
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, user: updated }));
+            } catch (e) {
+                console.error('[set-user-flag] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: e.message }));
+            }
+        });
+        return;
+    }
+
+    // Lightweight compatibility endpoints for legacy frontend requests
+    // POST /api/Wallet/getuserzt - return KYC/status info from users.json
+    if (pathname === '/api/Wallet/getuserzt' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const data = parseBodyString(body || '');
+                const userId = data.userid || data.user_id || data.uid || data.id;
+
+                // Load users.json
+                const usersFile = path.join(__dirname, 'users.json');
+                let users = [];
+                if (fs.existsSync(usersFile)) {
+                    try { users = JSON.parse(fs.readFileSync(usersFile, 'utf8')); } catch (e) { users = []; }
+                }
+
+                // If userid looks like an address, match wallet_address
+                let user = null;
+                if (userId && String(userId).toLowerCase().startsWith('0x')) {
+                    user = users.find(u => (u.wallet_address || '').toLowerCase() === String(userId).toLowerCase());
+                } else {
+                    user = users.find(u => String(u.userid) === String(userId) || String(u.uid) === String(userId));
+                }
+
+                if (!user) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'User not found' }));
+                    return;
+                }
+
+                const kycMap = { none: 0, basic: 1, advanced: 2 };
+                const renzhengzhuangtai = kycMap[user.kycStatus] || 0;
+                const xinyongfen = user.creditScore || 0;
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: { renzhengzhuangtai, xinyongfen, balance: user.balance || 0, status: user.status || 'active' } }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, info: e.message }));
+            }
+        });
+        return;
+    }
+
+    // POST /api/User/getsfxtz - notification/status quick check (legacy)
+    if (pathname === '/api/User/getsfxtz' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const data = parseBodyString(body || '');
+                const userId = data.userid || data.user_id || data.uid || data.id;
+
+                // Best-effort: if user exists, return data:1 (show dot), else 0
+                const usersFile = path.join(__dirname, 'users.json');
+                let users = [];
+                if (fs.existsSync(usersFile)) {
+                    try { users = JSON.parse(fs.readFileSync(usersFile, 'utf8')); } catch (e) { users = []; }
+                }
+
+                const userExists = !!users.find(u => String(u.userid) === String(userId) || String(u.uid) === String(userId));
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: userExists ? 1 : 0 }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, info: e.message }));
+            }
+        });
+        return;
     }
 
     // Default to index.html for root
@@ -3023,18 +3438,12 @@ const server = http.createServer((req, res) => {
             res.end(data);
         });
     });
-    } catch (err) {
-        console.error('Unhandled error in request:', err);
-        if (!res.headersSent) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Internal server error', message: err.message }));
-        }
-    }
 });
+    
 
 // Start server
 server.listen(PORT, HOST, () => {
-    console.log(`
+        console.log(`
 ╔════════════════════════════════════════════╗
 ║     BVOX Finance Development Server        ║
 ╚════════════════════════════════════════════╝
@@ -3043,15 +3452,15 @@ server.listen(PORT, HOST, () => {
 📁 Root directory: ${__dirname}
 
 Available features:
-  ✓ Static file serving
-  ✓ CORS enabled
-  ✓ Hot reload compatible
-  ✓ Development debugging
+    ✓ Static file serving
+    ✓ CORS enabled
+    ✓ Hot reload compatible
+    ✓ Development debugging
 
 Open your browser at: http://${HOST}:${PORT}
 
 Press Ctrl+C to stop the server
-    `);
+`);
 });
 
 // Handle server errors

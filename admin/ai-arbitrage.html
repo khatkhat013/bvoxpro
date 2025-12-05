@@ -114,6 +114,8 @@
             border-radius: 0 0 12px 12px;
             overflow: hidden;
         }
+        /* Allow horizontal scroll on small screens as fallback */
+        .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
         table {
             width: 100%;
@@ -443,6 +445,14 @@
                 min-width: 70px;
             }
 
+            /* Mobile: make action buttons stacked and full-width for touch */
+            .action-buttons { display: flex; flex-direction: column; gap: 8px; }
+            .btn-view, .btn-stop { width: 100%; display: block; }
+
+            .id-cell { font-size: 11px; }
+            .pair-badge { font-size: 13px; padding: 6px 8px; }
+            .amount-cell { font-size: 14px; }
+
             .pagination {
                 flex-wrap: wrap;
                 gap: 6px;
@@ -503,6 +513,13 @@
             th, td {
                 padding: 12px 15px;
             }
+        }
+
+        /* Additional small-screen tweaks */
+        @media (max-width: 380px) {
+            .filter-group input, .filter-group select { font-size: 14px; }
+            .header h1 { font-size: 16px; }
+            .pair-badge { font-size: 12px; padding: 4px 6px; }
         }
 
         @media (min-width: 769px) {
@@ -617,15 +634,44 @@
             }
         ];
 
-        // Load arbitrage records
+        // Load arbitrage records (from subscriptions file)
         function loadArbitrageRecords() {
-            // Try to fetch from server, fallback to sample data
+            // Try to fetch subscriptions from repository JSON; fallback to sample data
             $.ajax({
-                url: '/arbitrage_records.json',
+                url: '/arbitrage_subscriptions.json',
                 method: 'GET',
                 dataType: 'json',
                 success: function(data) {
-                    allRecords = data || sampleArbitrage;
+                    // Map subscription structure to table-friendly record structure
+                    if (Array.isArray(data)) {
+                        allRecords = data.map(s => ({
+                            id: s.id || '',
+                            user_id: s.user_id || '',
+                            pair: s.product_name || s.product_id || 'N/A',
+                            initial_amount: s.amount || 0,
+                            profit: s.total_income || 0,
+                            roi: s.amount ? ((s.total_income || 0) / s.amount * 100) : 0,
+                            status: s.status || 'unknown',
+                            created_at: s.created_at || s.start_date || new Date().toISOString()
+                        }));
+                    } else {
+                        allRecords = sampleArbitrage;
+                    }
+
+                    // Assign a deterministic sequential display ID for each record
+                    // Format: AI-<number> (e.g. AI-123456, AI-123457 ...)
+                    // We keep a mapping so filtered/paginated views show stable IDs.
+                    const baseSeq = -1; // starting value so first generated display ID becomes AI-000000
+                    const sortedForIds = [...allRecords].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                    const idMap = {};
+                    sortedForIds.forEach((r, idx) => {
+                        const num = baseSeq + idx + 1;
+                        idMap[r.id] = 'AI-' + String(num).padStart(6, '0');
+                    });
+
+                    // Attach display_id to each record for rendering
+                    allRecords = allRecords.map(r => ({ ...r, display_id: idMap[r.id] || r.id }));
+
                     filteredRecords = [...allRecords];
                     displayPage(1);
                 },
@@ -678,20 +724,22 @@
                     minute: '2-digit'
                 });
 
-                const profitBadgeClass = record.profit >= 0 ? 'profit-badge' : 'loss-badge';
-                const profitText = record.profit >= 0 ? `+${record.profit}` : `${record.profit}`;
-                const roiText = record.roi >= 0 ? `+${record.roi}%` : `${record.roi}%`;
+                const profitVal = Number(record.profit) || 0;
+                const profitBadgeClass = profitVal >= 0 ? 'profit-badge' : 'loss-badge';
+                const profitText = (profitVal >= 0 ? '+' : '') + profitVal.toFixed(2);
+                const roiVal = Number(record.roi) || 0;
+                const roiText = (roiVal >= 0 ? '+' : '') + roiVal.toFixed(3) + '%';
 
                 const row = `
                     <tr>
-                        <td><div class="id-cell">${record.id}</div></td>
-                        <td><div class="user-cell">${record.user_id}</div></td>
-                        <td><span class="pair-badge">${record.pair}</span></td>
-                        <td><div class="amount-cell">${record.initial_amount.toLocaleString()} USD</div></td>
-                        <td><span class="${profitBadgeClass}">${profitText} USD</span></td>
-                        <td><strong>${roiText}</strong></td>
-                        <td><span class="status-badge ${statusClass}">${record.status || 'pending'}</span></td>
-                        <td><div class="date-cell">${createdDate}</div></td>
+                            <td data-label="ID"><div class="id-cell">${record.display_id || record.id}</div></td>
+                            <td data-label="User"><div class="user-cell">${record.user_id}</div></td>
+                            <td data-label="Pair"><span class="pair-badge">${record.pair}</span></td>
+                            <td data-label="Initial Amount"><div class="amount-cell">${Number(record.initial_amount).toLocaleString()} USD</div></td>
+                            <td data-label="Profit/Loss"><span class="${profitBadgeClass}">${profitText} USD</span></td>
+                            <td data-label="ROI %"><strong>${roiText}</strong></td>
+                            <td data-label="Status"><span class="status-badge ${statusClass}">${record.status || 'pending'}</span></td>
+                            <td data-label="Start Date"><div class="date-cell">${createdDate}</div></td>
                         <td>
                             <div class="action-buttons">
                                 <button class="btn-view">View</button>
