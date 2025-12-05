@@ -749,11 +749,14 @@
                 dataType: 'json',
                 success: function(res) {
                     if (res.code == 1) {
+						console.log('[getorder] Response received: res.data=' + res.data + ', kongzhi=' + kongzhi + ', sfyks=' + sfyks);
 						if (sfyks == 0) {
 							// 第一次进入
 							sfyks = 1;
 							if (res.data != kongzhi) {
 								kongzhi = res.data;  // 更新 kongzhi 值，避免重复判断
+
+								console.log('[getorder] First settlement result received: data=' + res.data + ', fangxiang=' + fangxiang);
 
 								if (res.data == 0) {
 									// 未指定输赢，基于随机数决定涨跌
@@ -971,6 +974,7 @@
 				currentValue = currentTarget;
 				clearTimestampInterval(intervalId); // 停止定时器
 				clearTimestampInterval(orderst);
+				console.log('[generateRandomValue] Animation complete: finalPrice=' + safeFormatPrice(currentValue));
 				$('#y-dqbj').text(safeFormatPrice(currentValue));
 				$('#y-dqjg').text(safeFormatPrice(currentValue));
 				coin_data = setTimestampInterval(getcoin_data,2000);
@@ -998,12 +1002,24 @@
 			$('#y-dqbj').text(safeFormatPrice(currentValue));
 			$('#y-dqjg').text(safeFormatPrice(currentValue));
 
-			// 输出当前值
-			// console.log('当前值: ' + currentValue.toFixed(xsw[coinname]) + ' 目标值:' + currentTarget.toFixed(xsw[coinname])+ '剩余时间:'+ remainingTime + 's');
+			if (elapsedTime % 10 === 0) {
+				console.log('[generateRandomValue] elapsed=' + elapsedTime + 's, remainingTime=' + remainingTime + 's, currentValue=' + safeFormatPrice(currentValue) + ', target=' + safeFormatPrice(currentTarget));
+			}
 		}
 
 		// 动态设置目标值为增加或者减少
 		function setTarget(increase, seconds) {
+			// IMPORTANT FIX: Ensure originalValue is synced with current display price
+			// This fixes the "price freezing" issue by ensuring animation starts from correct base
+			const currentDisplayPrice = Number($('#y-dqjg').text()) || Number(originalValue) || 0;
+			if (Number.isFinite(currentDisplayPrice) && currentDisplayPrice > 0) {
+				originalValue = currentDisplayPrice;
+				currentValue = Number(originalValue);
+			}
+			
+			// Recalculate targets based on current display price
+			generateTargets();
+			
 			currentTarget = increase ? increaseTarget : decreaseTarget; // 根据传入参数选择目标值
 			
 			totalTime = seconds; // 设置需要达到目标的时间
@@ -1017,6 +1033,8 @@
 			}
 
 			clearTimestampInterval(coin_data);
+
+			console.log('[setTarget] Starting animation: increase=' + increase + ', seconds=' + seconds + ', originalValue=' + originalValue + ', currentTarget=' + currentTarget);
 
 			// 启动新的定时器
 			intervalId = setTimestampInterval(generateRandomValue, 1000); // 每秒生成一个随机数

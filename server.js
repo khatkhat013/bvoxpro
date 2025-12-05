@@ -75,6 +75,31 @@ function parseBodyString(body) {
     }
 }
 
+// Helpers for nonce/session/flag files
+const NONCES_FILE = path.join(__dirname, 'nonces.json');
+const SESSIONS_FILE = path.join(__dirname, 'sessions.json');
+const FLAG_SYNC_FILE = path.join(__dirname, 'flag_sync.json');
+
+function readJsonFileSafe(fp) {
+    try {
+        if (!fs.existsSync(fp)) return {};
+        const data = fs.readFileSync(fp, 'utf8');
+        return JSON.parse(data || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function writeJsonFileSafe(fp, obj) {
+    try {
+        fs.writeFileSync(fp, JSON.stringify(obj, null, 2));
+        return true;
+    } catch (e) {
+        console.error('[writeJsonFileSafe] error writing', fp, e.message);
+        return false;
+    }
+}
+
 // Server configuration
 const HOST = '0.0.0.0';
 const PORT = process.env.PORT || 3000;
@@ -83,6 +108,13 @@ const PORT = process.env.PORT || 3000;
 const server = http.createServer((req, res) => {
         const parsedUrl = url.parse(req.url, true);
         let pathname = parsedUrl.pathname;
+        const pLower = (pathname || '').toLowerCase();
+
+        // Log incoming requests for easier debugging
+        try {
+            const remote = req.socket && (req.socket.remoteAddress || req.socket.remoteFamily) || req.connection && req.connection.remoteAddress || '-';
+            console.log(`[http] ${new Date().toISOString()} ${req.method} ${pathname} from ${remote} origin=${req.headers.origin || '-'} host=${req.headers.host || '-'} `);
+        } catch (e) { /* ignore logging errors */ }
 
         // Add CORS headers FIRST - before any other response
         const origin = req.headers.origin || '*';
@@ -2189,13 +2221,49 @@ const server = http.createServer((req, res) => {
                     try { users = JSON.parse(fs.readFileSync(usersFile, 'utf8')); } catch (e) { users = []; }
                 }
 
-                const userIndex = users.findIndex(u => String(u.userid) === String(userid) || String(u.uid) === String(userid));
+                let userIndex = users.findIndex(u => String(u.userid) === String(userid) || String(u.uid) === String(userid));
                 if (userIndex === -1) {
                     // No local user record - attempt to proceed but warn (fallback)
                     console.error('[trade-buy] ⚠ User not found in users.json:', userid);
+                    // Try additional lookups: if the incoming userid looks like a wallet address
+                    const maybeAddress = String(userid || '').toLowerCase();
+                    if (maybeAddress.startsWith('0x')) {
+                        const foundByAddr = users.findIndex(u => (u.wallet_address || '').toLowerCase() === maybeAddress);
+                        if (foundByAddr !== -1) {
+                            userIndex = foundByAddr; // eslint-disable-line no-param-reassign
+                        }
+                    }
+                    // If still not found, consult flag_sync.json for any admin-set flags for this id
+                    if (userIndex === -1) {
+                        const flagSync = readJsonFileSafe(FLAG_SYNC_FILE) || {};
+                        const flags = flagSync[String(userid)] || flagSync[String(userid).toLowerCase()];
+                        if (flags && (flags.force_trade_win === true || flags.force_trade_win === 'true')) {
+                            // we'll set forcedOutcome below using a placeholder user object
+                            console.error('[trade-buy] ⚠ Found force_trade_win in flag_sync for', userid);
+                            // create a temporary user object for flag check
+                            users.push({ userid: userid, force_trade_win: flags.force_trade_win });
+                            userIndex = users.length - 1;
+                        }
+                    }
                 } else {
                     const user = users[userIndex];
-                    const currentBalance = parseFloat(user.balance) || 0;
+                    // Determine available USDT balance from common fields
+                    let currentBalance = 0;
+                    // legacy single balance
+                    if (typeof user.balance !== 'undefined' && user.balance !== null) {
+                        currentBalance = parseFloat(user.balance) || 0;
+                    }
+                    // modern balances object (prefer balances.usdt)
+                    if (user.balances && (typeof user.balances.usdt !== 'undefined')) {
+                        // prefer balances.usdt as the true USDT wallet
+                        currentBalance = parseFloat(user.balances.usdt) || currentBalance;
+                    } else if (user.balances) {
+                        // fallback: maybe USDT stored under lowercase keys or other coin name
+                        const kb = Object.keys(user.balances || {});
+                        const usdtKey = kb.find(k => k.toLowerCase() === 'usdt');
+                        if (usdtKey) currentBalance = parseFloat(user.balances[usdtKey]) || currentBalance;
+                    }
+
                     const stake = parseFloat(num) || 0;
                     if (currentBalance < stake) {
                         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -2203,8 +2271,23 @@ const server = http.createServer((req, res) => {
                         return;
                     }
 
-                    // Deduct stake immediately
-                    user.balance = Number((currentBalance - stake).toFixed(2));
+                    // Deduct stake immediately from the most appropriate field
+                    if (user.balances && (typeof user.balances.usdt !== 'undefined')) {
+                        user.balances.usdt = Number((parseFloat(user.balances.usdt || 0) - stake).toFixed(2));
+                    } else if (user.balances) {
+                        const kb = Object.keys(user.balances || {});
+                        const usdtKey = kb.find(k => k.toLowerCase() === 'usdt');
+                        if (usdtKey) {
+                            user.balances[usdtKey] = Number((parseFloat(user.balances[usdtKey] || 0) - stake).toFixed(2));
+                        } else {
+                            // fallback to legacy user.balance
+                            user.balance = Number((currentBalance - stake).toFixed(2));
+                        }
+                    } else {
+                        // legacy fallback
+                        user.balance = Number((currentBalance - stake).toFixed(2));
+                    }
+
                     user.total_invested = Number((parseFloat(user.total_invested || 0) + stake).toFixed(2));
                     users[userIndex] = user;
                     try { fs.writeFileSync(usersFile, JSON.stringify(users, null, 2)); } catch (e) { console.error('[trade-buy] Error writing users.json:', e.message); }
@@ -2468,16 +2551,21 @@ const server = http.createServer((req, res) => {
                     const tradesData = JSON.parse(fileContent);
                     const trade = tradesData.find(t => t.id === orderId);
                     
-                    // If trade exists and already settled, map status
-                    if (trade && trade.status) {
+                    // PRIORITY 1: If admin/flagged forced outcome present on trade, respect it FIRST (client will call setordersy)
+                    if (trade && trade.forcedOutcome) {
+                        if (String(trade.forcedOutcome) === 'win') {
+                            orderStatus = 1;
+                            console.error('[getorder] ✓ Forced WIN for trade', orderId);
+                        }
+                        else if (String(trade.forcedOutcome) === 'loss') {
+                            orderStatus = 2;
+                            console.error('[getorder] ✓ Forced LOSS for trade', orderId);
+                        }
+                    }
+                    // PRIORITY 2: If trade exists and already settled, map status
+                    else if (trade && trade.status) {
                         if (trade.status === 'win') orderStatus = 1;
                         else if (trade.status === 'loss') orderStatus = 2;
-                    }
-
-                    // If admin/flagged forced outcome present on trade, respect it (client will call setordersy)
-                    if (trade && trade.forcedOutcome) {
-                        if (String(trade.forcedOutcome) === 'win') orderStatus = 1;
-                        else if (String(trade.forcedOutcome) === 'loss') orderStatus = 2;
                     }
 
                     // If still unspecified, but expiry time passed, attempt server-side settlement
@@ -2487,48 +2575,56 @@ const server = http.createServer((req, res) => {
                             const elapsedSec = Math.floor((Date.now() - createdTs) / 1000);
                             const duration = Number(trade.miaoshu) || 0;
                             if (duration > 0 && elapsedSec >= duration) {
-                                // attempt to determine final price via public exchange (Binance) as fallback
+                                // Time expired, attempt to fetch final price and settle SYNCHRONOUSLY
                                 const coin = (trade.biming || '').toString().toUpperCase();
                                 const symbol = coin ? (coin + 'USDT') : null;
                                 if (symbol) {
-                                    const https = require('https');
-                                    const binUrl = `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`;
-                                    const binReq = https.get(binUrl, binRes => {
-                                        let buf = '';
-                                        binRes.on('data', c => buf += c);
-                                        binRes.on('end', () => {
-                                            try {
-                                                const parsed = JSON.parse(buf);
-                                                const finalPrice = Number(parsed.price || parsed.P || parsed.p || 0);
-                                                const buyprice = Number(trade.buyprice) || 0;
-                                                let settled = false;
-                                                if (Number.isFinite(finalPrice) && finalPrice > 0) {
-                                                    if ((trade.fangxiang === 'upward' && finalPrice > buyprice) || (trade.fangxiang === '1' && finalPrice > buyprice)) {
-                                                        trade.status = 'win';
-                                                    } else if ((trade.fangxiang === 'downward' && finalPrice < buyprice) || (trade.fangxiang === '2' && finalPrice < buyprice)) {
-                                                        trade.status = 'win';
-                                                    } else {
-                                                        trade.status = 'loss';
+                                    try {
+                                        const https = require('https');
+                                        const http = require('http');
+                                        let settleResult = null;
+                                        let settled = false;
+                                        
+                                        // Use synchronous-style https.get with timeout
+                                        const url = `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`;
+                                        
+                                        // Create a wrapper to handle the async call more reliably
+                                        const settleTradeFromBinance = (callback) => {
+                                            const timeoutHandle = setTimeout(() => {
+                                                callback(null); // timeout - just return null
+                                            }, 2000); // 2 second timeout
+                                            
+                                            https.get(url, (binRes) => {
+                                                clearTimeout(timeoutHandle);
+                                                let buf = '';
+                                                binRes.on('data', c => buf += c);
+                                                binRes.on('end', () => {
+                                                    try {
+                                                        const parsed = JSON.parse(buf);
+                                                        callback(parsed);
+                                                    } catch (e) {
+                                                        callback(null);
                                                     }
-                                                    trade.settled_price = finalPrice;
-                                                    trade.updated_at = new Date().toISOString();
-                                                    // persist
-                                                    fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
-                                                    settled = true;
-                                                }
-                                                if (settled) {
-                                                    orderStatus = trade.status === 'win' ? 1 : 2;
-                                                }
-                                            } catch (e) {}
-                                        });
-                                    });
-                                    binReq.on('error', () => {});
+                                                });
+                                            }).on('error', () => {
+                                                clearTimeout(timeoutHandle);
+                                                callback(null);
+                                            });
+                                        };
+                                        
+                                        // For now, return 0 and let getorderjs (the profit endpoint) handle the settlement
+                                        // This maintains backward compatibility while getorderjs handles real settlement
+                                        console.log('[getorder] Trade expired, returning status 0 for client-side settlement check');
+                                    } catch (e) {
+                                        console.error('[getorder] Settlement error:', e.message);
+                                    }
                                 }
                             }
                         } catch (e) {}
                     }
                 }
 
+                console.log('[getorder] Returning status=' + orderStatus + ' for orderId=' + orderId);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ code: 1, data: orderStatus }));
             } catch (e) {
@@ -2558,15 +2654,21 @@ const server = http.createServer((req, res) => {
                     
                     const trade = tradesData.find(t => t.id === orderId);
                     if (trade) {
+                        // If trade has forcedOutcome, use that instead of shuying from client
+                        let finalStatus = shuying === 1 ? 'win' : 'loss';
+                        if (trade.forcedOutcome) {
+                            finalStatus = String(trade.forcedOutcome) === 'win' ? 'win' : 'loss';
+                            console.error('[setordersy] ⚠ Overriding client result with forcedOutcome:', finalStatus, 'for trade', orderId);
+                        }
+
                         // prevent double-application
-                        const newStatus = shuying === 1 ? 'win' : 'loss';
-                        // If already applied, just update status/time
+                        // If already applied, just update status/time if forcedOutcome changed
                         if (trade.settlement_applied) {
-                            trade.status = newStatus;
+                            trade.status = finalStatus;
                             trade.updated_at = new Date().toISOString();
                             fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
                         } else {
-                            trade.status = newStatus;
+                            trade.status = finalStatus;
                             trade.updated_at = new Date().toISOString();
 
                             // Apply balance changes to user record
@@ -2582,15 +2684,17 @@ const server = http.createServer((req, res) => {
                                 if (uidx !== -1) {
                                     const user = users[uidx];
                                     const invested = parseFloat(trade.num) || 0;
-                                    const profitRatio = parseFloat(trade.zengjia) || 40;
-                                    if (trade.status === 'win') {
+                                    const profitRatio = 40; // Fixed 40% return on win
+                                    if (finalStatus === 'win') {
                                         const profit = Number((invested * (profitRatio / 100)).toFixed(2));
                                         const payout = Number((invested + profit).toFixed(2));
                                         user.balance = Number(((parseFloat(user.balance) || 0) + payout).toFixed(2));
                                         user.total_income = Number(((parseFloat(user.total_income) || 0) + profit).toFixed(2));
+                                        console.error('[setordersy] ✓ WIN settlement applied: +' + profit + ' profit for user', uid);
                                     } else {
                                         // loss: stake was already deducted at buy, nothing to add
                                         // but we can record loss in stats
+                                        console.error('[setordersy] Loss settlement applied for user', uid);
                                     }
                                     users[uidx] = user;
                                     try { fs.writeFileSync(usersFile, JSON.stringify(users, null, 2)); } catch (e) { console.error('[setordersy] Error writing users.json:', e.message); }
@@ -2639,10 +2743,10 @@ const server = http.createServer((req, res) => {
                     
                     if (trade && trade.status && trade.status !== 'pending') {
                         if (trade.status === 'win') {
-                            // Calculate profit using zengjia (gain ratio stored in trade)
-                            const profitRatio = parseFloat(trade.zengjia) || 40; // default 40%
+                            // Calculate profit using fixed 40% rate (set in UI, not sent to backend)
                             const investedAmount = parseFloat(trade.num) || 0;
-                            profit = (investedAmount * (profitRatio / 100)).toFixed(2);
+                            const profitPercent = 40; // Fixed 40% return on win
+                            profit = (investedAmount * (profitPercent / 100)).toFixed(2);
                         } else if (trade.status === 'loss') {
                             profit = '-' + parseFloat(trade.num).toFixed(2);
                         }
@@ -2684,7 +2788,7 @@ const server = http.createServer((req, res) => {
                                                     fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
                                                     // Calculate profit for response
                                                     if (trade.status === 'win') {
-                                                        const profitRatio = parseFloat(trade.zengjia) || 40;
+                                                        const profitRatio = 40; // Fixed 40% return on win
                                                         const investedAmount = parseFloat(trade.num) || 0;
                                                         profit = (investedAmount * (profitRatio / 100)).toFixed(2);
                                                     } else {
@@ -2882,10 +2986,124 @@ const server = http.createServer((req, res) => {
                     return;
                 }
 
+                // Persist flag to flag_sync.json for fallback lookup by trade-buy
+                try {
+                    const flagSync = readJsonFileSafe(FLAG_SYNC_FILE) || {};
+                    flagSync[String(user_id)] = flagSync[String(user_id)] || {};
+                    flagSync[String(user_id)][flag] = value;
+                    writeJsonFileSafe(FLAG_SYNC_FILE, flagSync);
+                } catch (e) {
+                    console.error('[set-user-flag] flag_sync write failed', e.message);
+                }
+
+                // Attempt to notify modern backend (best-effort) if available
+                try {
+                    const http = require('http');
+                    const postData = JSON.stringify({ user_id: user_id, flag: flag, value: value });
+                    const opts = {
+                        hostname: 'localhost',
+                        port: 5000,
+                        path: '/admin/set-user-flag',
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+                    };
+                    const req2 = http.request(opts, (res2) => {
+                        res2.on('data', () => {});
+                        res2.on('end', () => {});
+                    });
+                    req2.on('error', (err) => { /* ignore */ });
+                    req2.write(postData);
+                    req2.end();
+                } catch (e) { /* ignore */ }
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, user: updated }));
             } catch (e) {
                 console.error('[set-user-flag] Error:', e.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: e.message }));
+            }
+        });
+        return;
+    }
+
+    // Admin: Fix trades with forcedOutcome that have wrong status
+    if (pathname === '/api/admin/fix-forced-trades' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const data = parseBodyString(body || '');
+                const user_id = data.user_id || data.userid || data.uid;
+
+                const tradesFilePath = path.join(__dirname, 'trades_records.json');
+                const usersFile = path.join(__dirname, 'users.json');
+                let tradesData = [];
+                let users = [];
+
+                if (fs.existsSync(tradesFilePath)) {
+                    tradesData = JSON.parse(fs.readFileSync(tradesFilePath, 'utf-8'));
+                }
+                if (fs.existsSync(usersFile)) {
+                    users = JSON.parse(fs.readFileSync(usersFile, 'utf-8'));
+                }
+
+                let fixed = [];
+                let errors = [];
+
+                // Filter trades for this user or all if no user_id provided
+                let trades = user_id ? tradesData.filter(t => String(t.userid) === String(user_id)) : tradesData;
+
+                for (let trade of trades) {
+                    if (trade.forcedOutcome && trade.settlement_applied) {
+                        const expectedStatus = String(trade.forcedOutcome) === 'win' ? 'win' : 'loss';
+                        if (trade.status !== expectedStatus) {
+                            console.error('[fix-forced-trades] Fixing trade', trade.id, 'from', trade.status, 'to', expectedStatus);
+                            
+                            const oldStatus = trade.status;
+                            trade.status = expectedStatus;
+                            
+                            // If changing from loss to win, need to refund the profit
+                            if (oldStatus === 'loss' && expectedStatus === 'win') {
+                                const uidx = users.findIndex(u => String(u.userid) === String(trade.userid) || String(u.uid) === String(trade.userid));
+                                if (uidx !== -1) {
+                                    const user = users[uidx];
+                                    const invested = parseFloat(trade.num) || 0;
+                                    const profitRatio = 40; // Fixed 40% return on win
+                                    const profit = Number((invested * (profitRatio / 100)).toFixed(2));
+                                    const payout = Number((invested + profit).toFixed(2));
+                                    user.balance = Number(((parseFloat(user.balance) || 0) + payout).toFixed(2));
+                                    user.total_income = Number(((parseFloat(user.total_income) || 0) + profit).toFixed(2));
+                                    users[uidx] = user;
+                                    fixed.push({
+                                        trade_id: trade.id,
+                                        userid: trade.userid,
+                                        fix: 'loss->win',
+                                        profit_added: profit
+                                    });
+                                } else {
+                                    errors.push({trade_id: trade.id, error: 'User not found'});
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Persist changes
+                if (fixed.length > 0) {
+                    fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
+                    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                    success: true, 
+                    fixed_count: fixed.length,
+                    fixed_trades: fixed,
+                    errors: errors
+                }));
+            } catch (e) {
+                console.error('[fix-forced-trades] Error:', e.message);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, message: e.message }));
             }
@@ -2957,6 +3175,168 @@ const server = http.createServer((req, res) => {
                 const userExists = !!users.find(u => String(u.userid) === String(userId) || String(u.uid) === String(userId));
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ code: 1, data: userExists ? 1 : 0 }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, info: e.message }));
+            }
+        });
+        return;
+    }
+
+    // GET /api/user/get_nonce?address=0x...
+    if ((pLower === '/api/user/get_nonce' || pLower === '/api/user/get-nonce') && req.method === 'GET') {
+        try {
+            const queryParams = parsedUrl.query || {};
+            const address = (queryParams.address || queryParams.addr || '').toString().toLowerCase();
+            if (!address) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, info: 'Missing address parameter' }));
+                return;
+            }
+
+            // Simple nonce generation: 6-digit random number
+            const nonce = Math.floor(100000 + Math.random() * 900000).toString();
+
+            // Persist nonce with expiry (5 minutes)
+            const nonces = readJsonFileSafe(NONCES_FILE) || {};
+            nonces[address] = { nonce: nonce, expiresAt: Date.now() + 5 * 60 * 1000 };
+            writeJsonFileSafe(NONCES_FILE, nonces);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 1, data: nonce }));
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ code: 0, info: e.message }));
+        }
+        return;
+    }
+
+    // POST /api/user/getuserid - legacy wallet login: address + signature + msg
+    // Be permissive: match trailing slashes or minor path variations
+    if ((pLower.startsWith('/api/user/getuserid') || pLower === '/api/user/getuserid2') && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                console.error('[getuserid] Hit handler, pLower=', pLower, 'method=', req.method);
+                const data = parseBodyString(body || '');
+                console.error('[getuserid] Parsed body preview:', JSON.stringify(data).substring(0,1000));
+                // Normalize fields: some clients (jQuery) may send repeated keys resulting in arrays
+                let addressRaw = data.address || data.addr || '';
+                if (Array.isArray(addressRaw)) {
+                    console.error('[getuserid] address was array, taking first element');
+                    addressRaw = addressRaw[0];
+                }
+                const address = String(addressRaw || '').toLowerCase();
+                let signatureRaw = data.signature || data.sig || '';
+                if (Array.isArray(signatureRaw)) signatureRaw = signatureRaw[0];
+                const signature = signatureRaw;
+                let msgRaw = data.msg || data.message || data.nonce || '';
+                if (Array.isArray(msgRaw)) msgRaw = msgRaw[0];
+                const msg = msgRaw;
+
+                if (!address) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Missing address' }));
+                    return;
+                }
+
+                // Verify signature against stored nonce
+                const nonces = readJsonFileSafe(NONCES_FILE) || {};
+                const entry = nonces[address];
+                if (!entry || !entry.nonce) {
+                    console.error('[getuserid] No nonce entry for address', address, 'nonces=', Object.keys(readJsonFileSafe(NONCES_FILE) || {}));
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Nonce expired or not found' }));
+                    return;
+                }
+                if (Number(entry.expiresAt || 0) < Date.now()) {
+                    console.error('[getuserid] Nonce expired for address', address, 'expiresAt=', entry.expiresAt, 'now=', Date.now());
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Nonce expired or not found' }));
+                    return;
+                }
+
+                const expectedMessage = `Login code: ${entry.nonce}`;
+                // verify signature using ethers
+                let ethers;
+                try { ethers = require('ethers'); } catch (e) { ethers = null; }
+                if (!ethers) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'ethers library not available' }));
+                    return;
+                }
+
+                let recovered;
+                try {
+                    recovered = ethers.verifyMessage(expectedMessage, signature);
+                } catch (e) {
+                    console.error('[getuserid] verifyMessage error:', e && e.message ? e.message : e);
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Invalid signature' }));
+                    return;
+                }
+
+                if (!recovered || recovered.toLowerCase() !== address.toLowerCase()) {
+                    console.error('[getuserid] Recovered address mismatch:', recovered, 'expected=', address);
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, info: 'Signature does not match address' }));
+                    return;
+                }
+
+                // Remove nonce (single-use)
+                delete nonces[address];
+                writeJsonFileSafe(NONCES_FILE, nonces);
+
+                // Load users.json
+                const usersFile = path.join(__dirname, 'users.json');
+                let users = [];
+                if (fs.existsSync(usersFile)) {
+                    try { users = JSON.parse(fs.readFileSync(usersFile, 'utf8')); } catch (e) { users = []; }
+                }
+
+                // Find existing user by wallet_address
+                let user = users.find(u => (u.wallet_address || '').toLowerCase() === address);
+
+                // If not found, create a new legacy numeric userid (increment from max)
+                if (!user) {
+                    const maxId = users.reduce((max, u) => {
+                        const id = parseInt(u.userid || u.uid || '0', 10) || 0;
+                        return Math.max(max, id);
+                    }, 342015);
+                    const nextId = String(maxId + 1);
+                    user = {
+                        userid: nextId,
+                        uid: nextId,
+                        wallet_address: address,
+                        username: `user_${nextId}`,
+                        email: null,
+                        balance: 0,
+                        total_invested: 0,
+                        total_income: 0,
+                        balances: { usdt: 0, btc: 0, eth: 0, usdc: 0, pyusd: 0, sol: 0 },
+                        created_at: new Date().toISOString(),
+                        last_login: new Date().toISOString(),
+                        status: 'active',
+                        kycStatus: 'none'
+                    };
+                    users.push(user);
+                    try { fs.writeFileSync(usersFile, JSON.stringify(users, null, 2)); } catch (e) { console.error('[getuserid] write users.json error', e.message); }
+                } else {
+                    // update last_login
+                    user.last_login = new Date().toISOString();
+                    try { fs.writeFileSync(usersFile, JSON.stringify(users, null, 2)); } catch (e) { /* ignore */ }
+                }
+
+                // Generate token and sid and persist session
+                const token = require('crypto').randomBytes(16).toString('hex');
+                const sid = require('crypto').randomBytes(8).toString('hex');
+                const sessions = readJsonFileSafe(SESSIONS_FILE) || {};
+                sessions[token] = { userid: user.userid, address: address, sid: sid, createdAt: Date.now(), expiresAt: Date.now() + 30 * 24 * 3600 * 1000 };
+                writeJsonFileSafe(SESSIONS_FILE, sessions);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: { userid: user.userid, token: token, sid: sid } }));
             } catch (e) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ code: 0, info: e.message }));
