@@ -12,6 +12,74 @@ class WalletAuthSystem {
         this.init();
     }
 
+// --- Web3Modal connect hook ---
+// Ensure mobile WalletConnect deep-link flows create backend user records
+;(function attachWeb3ModalConnectHook() {
+    try {
+        const W = window.Web3Modal && window.Web3Modal.default;
+        if (!W || W.__connectHookApplied) return;
+
+        const origConnect = W.prototype.connect;
+        if (typeof origConnect !== 'function') return;
+
+        W.prototype.connect = async function patchedConnect() {
+            const provider = await origConnect.apply(this, arguments);
+
+            // best-effort: try to obtain the first account/address
+            (async () => {
+                try {
+                    let address = null;
+                    // common fields from providers
+                    if (provider.accounts && provider.accounts.length) {
+                        address = provider.accounts[0];
+                    } else if (provider.selectedAddress) {
+                        address = provider.selectedAddress;
+                    } else if (provider.address) {
+                        address = provider.address;
+                    } else if (provider.wc && provider.wc.accounts && provider.wc.accounts.length) {
+                        address = provider.wc.accounts[0];
+                    } else if (typeof provider.request === 'function') {
+                        try {
+                            const accs = await provider.request({ method: 'eth_accounts' });
+                            if (accs && accs.length) address = accs[0];
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+
+                    if (address) {
+                        // POST to backend endpoint to create/get user (non-blocking)
+                        try {
+                            await fetch('/wallet/get-or-create-user', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    address: address,
+                                    walletType: 'walletconnect',
+                                    userAgent: navigator.userAgent,
+                                }),
+                            });
+                        } catch (e) {
+                            // swallow network errors - we don't want to break the connect flow
+                            console.warn('web3connect-hook: failed to notify backend', e);
+                        }
+                    }
+                } catch (err) {
+                    // safe-guard: do not throw
+                    console.warn('web3connect-hook error', err);
+                }
+            })();
+
+            return provider;
+        };
+
+        W.__connectHookApplied = true;
+        console.log('web3connect-hook: applied Web3Modal connect hook');
+    } catch (err) {
+        console.warn('web3connect-hook: could not attach hook', err);
+    }
+})();
+
     /**
      * Initialize wallet authentication system
      */

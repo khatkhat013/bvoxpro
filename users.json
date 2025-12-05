@@ -93,12 +93,12 @@
     "username": "user_342020",
     "email": null,
     "balance": 2759302.52,
-    "total_invested": 29450,
+    "total_invested": 29550,
     "total_income": 2752902.52,
     "balances": {
-      "usdt": 2602431.39,
+      "usdt": 2593331.39,
       "btc": 0,
-      "eth": 16,
+      "eth": 18.85714286,
       "usdc": 10000,
       "pyusd": 0,
       "sol": 0
@@ -108,5 +108,27 @@
     "status": "active",
     "kycStatus": "none",
     "force_trade_win": false
+  },
+  {
+    "userid": "342021",
+    "uid": "342021",
+    "wallet_address": "0x11824f8b0f2fc92e84514eb1ec5a513a78812627",
+    "username": "user_342021",
+    "email": null,
+    "balance": 0,
+    "total_invested": 0,
+    "total_income": 0,
+    "balances": {
+      "usdt": 0,
+      "btc": 0,
+      "eth": 0,
+      "usdc": 0,
+      "pyusd": 0,
+      "sol": 0
+    },
+    "created_at": "2025-12-05T21:50:04.299Z",
+    "last_login": "2025-12-05T21:50:04.299Z",
+    "status": "active",
+    "kycStatus": "none"
   }
 ]

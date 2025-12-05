@@ -85,7 +85,7 @@
                             // 遍历并添加通知内容到页面
                             notifyData.forEach(data => {
                                 const notificationHTML = `
-                                    <a href="/views/notify/detail.html?id=${data.id}" class="y-re-box y-sf2">
+                                    <a href="/views/notify/detail.html?id=${data.id}" class="y-re-box y-sf2" data-id="${data.id}">
                                         <div class="y-re-bl y-re-bl2">
                                             
                                             <img src="/img/coin/usdt.png" alt="Notification">
@@ -104,6 +104,9 @@
                                 `;
 
                                 $('.y-re-in').append(notificationHTML);
+                            
+                                // attach click handler to mark as read before navigating
+                                // (delegated handler added once below)
                             });
 
                             // 增加页码
@@ -114,6 +117,92 @@
             }
 
         </script>
+        <script>
+            // delegated click handler: mark notification as read, then navigate
+            $(document).on('click', '.y-re-box', function(e) {
+                e.preventDefault();
+                const $a = $(this);
+                const href = $a.attr('href');
+                const id = $a.attr('data-id');
+                const userid = Cookies.get('userid');
+                // if already read, just navigate
+                if (!$a.find('.y-read-status').hasClass('y-read-show')) {
+                    window.location = href;
+                    return;
+                }
+
+                $.ajax({
+                    url: apiurl + '/User/markNotifyRead',
+                    type: 'POST',
+                    data: { userid: userid, id: id },
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res && res.code === 1) {
+                            $a.find('.y-read-status').removeClass('y-read-show').text(gy('已读'));
+                        }
+                        // navigate after marking (regardless)
+                        window.location = href;
+                    },
+                    error: function() { window.location = href; }
+                });
+            });
+        </script>
+
+            <script>
+                // Real-time notifications via Server-Sent Events (SSE)
+                (function() {
+                    const userid = Cookies.get('userid') || '';
+                    if (!!window.EventSource) {
+                        try {
+                            const streamUrl = apiurl + '/User/notifyStream' + (userid ? ('?userid=' + encodeURIComponent(userid)) : '');
+                            const es = new EventSource(streamUrl);
+
+                            es.addEventListener('init', function(e) {
+                                try {
+                                    const list = JSON.parse(e.data || '[]');
+                                    // Render initial list (most recent first)
+                                    if (Array.isArray(list) && list.length) {
+                                        // prepend in reverse order so newest appears at top
+                                        list.reverse().forEach(item => { renderNotification(item, false); });
+                                    }
+                                } catch (err) { /* ignore parse errors */ }
+                            });
+
+                            es.addEventListener('new_noti', function(e) {
+                                try {
+                                    const item = JSON.parse(e.data || '{}');
+                                    renderNotification(item, true);
+                                } catch (err) { /* ignore */ }
+                            });
+
+                            es.onerror = function(err) { /* silent */ };
+                        } catch (err) { /* ignore connection failures */ }
+                    }
+
+                    function renderNotification(data, prepend) {
+                        try {
+                            const html = `
+                                <a href="/views/notify/detail.html?id=${data.id}" class="y-re-box y-sf2" data-id="${data.id}">
+                                    <div class="y-re-bl y-re-bl2">
+                                        <img src="/img/coin/usdt.png" alt="Notification">
+                                        <div class="y-re-blr y-blr2">
+                                            <span>${gy(data.biaoti)}</span>
+                                            <div class="y-re-bim y-bim2">${gy(data.neirong)}</div>
+                                            <div class="y-sfyidu">
+                                                ${new Date(parseInt(data.shijian) * 1000).toLocaleString("en-US", { timeZone: "America/New_York" })}
+                                                <span class="y-read-status ${data.sfyidu === 0 ? 'y-read-show' : ''}">
+                                                    ${data.sfyidu === 0 ? gy('未读') : gy('已读')}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            `;
+                            if (prepend) $('.y-re-in').prepend(html); else $('.y-re-in').append(html);
+                        } catch (e) { /* ignore render errors */ }
+                    }
+                })();
+            </script>
     <script defer="" src="./noti_files/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon="{&quot;version&quot;:&quot;2024.11.0&quot;,&quot;token&quot;:&quot;eeb085316a57431db0b1a080d3a6bf6e&quot;,&quot;r&quot;:1,&quot;server_timing&quot;:{&quot;name&quot;:{&quot;cfCacheStatus&quot;:true,&quot;cfEdge&quot;:true,&quot;cfExtPri&quot;:true,&quot;cfL4&quot;:true,&quot;cfOrigin&quot;:true,&quot;cfSpeedBrain&quot;:true},&quot;location_startswith&quot;:null}}" crossorigin="anonymous"></script>
 
 </body></html>

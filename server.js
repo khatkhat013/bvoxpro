@@ -100,6 +100,78 @@ function writeJsonFileSafe(fp, obj) {
     }
 }
 
+// Notification helpers
+function readNotificationsFile() {
+    const notiFile = path.join(__dirname, 'notifications.json');
+    try {
+        if (!fs.existsSync(notiFile)) return [];
+        const raw = fs.readFileSync(notiFile, 'utf8') || '[]';
+        return JSON.parse(raw);
+    } catch (e) {
+        console.error('[readNotificationsFile] parse error', e && e.message ? e.message : e);
+        return [];
+    }
+}
+
+function writeNotificationsFile(arr) {
+    const notiFile = path.join(__dirname, 'notifications.json');
+    try {
+        fs.writeFileSync(notiFile, JSON.stringify(arr, null, 2));
+        return true;
+    } catch (e) {
+        console.error('[writeNotificationsFile] write error', e && e.message ? e.message : e);
+        return false;
+    }
+}
+
+function addNotification({ userid = null, biaoti, neirong, shijian = Math.floor(Date.now()/1000), sfyidu = 0 }) {
+    const arr = readNotificationsFile();
+    const item = { id: uuidv4(), userid, biaoti, neirong, shijian, sfyidu: sfyidu ? 1 : 0 };
+    arr.push(item);
+    writeNotificationsFile(arr);
+    try { broadcastNotification && broadcastNotification(item); } catch (e) {}
+    return item;
+}
+
+function markNotificationRead(id, userid) {
+    const arr = readNotificationsFile();
+    let changed = false;
+    for (let i = 0; i < arr.length; i++) {
+        const n = arr[i];
+        if (String(n.id) === String(id)) {
+            // If userid provided, enforce match
+            if (userid && n.userid && String(n.userid) !== String(userid)) continue;
+            if (!n.sfyidu || n.sfyidu === 0) {
+                n.sfyidu = 1;
+                changed = true;
+            }
+        }
+    }
+    if (changed) writeNotificationsFile(arr);
+    return changed;
+}
+
+// Server-Sent Events (SSE) clients for real-time notifications
+const sseClients = [];
+
+function broadcastNotification(item) {
+    try {
+        const payload = JSON.stringify(item);
+        for (let i = sseClients.length - 1; i >= 0; i--) {
+            const client = sseClients[i];
+            try {
+                // If notification is user-scoped, only send to matching clients
+                if (item.userid && client.userid && String(item.userid) !== String(client.userid)) continue;
+                client.res.write(`event: new_noti\n`);
+                client.res.write(`data: ${payload}\n\n`);
+            } catch (e) {
+                // If a client write fails, remove it
+                try { sseClients.splice(i, 1); } catch (e2) {}
+            }
+        }
+    } catch (e) { console.error('[broadcastNotification] error', e && e.message ? e.message : e); }
+}
+
 // Server configuration
 const HOST = '0.0.0.0';
 const PORT = process.env.PORT || 3000;
@@ -352,8 +424,13 @@ const server = http.createServer((req, res) => {
 
                         // Save updated users
                         fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+                        // Notify user about exchange completion
+                        try {
+                            addNotification({ userid: user_id, biaoti: 'Exchange Completed', neirong: `You exchanged ${fromAmount} ${fromCoin.toUpperCase()} → ${toAmount} ${toCoin.toUpperCase()}.`, sfyidu: 0 });
+                        } catch (e) { /* best-effort only */ }
                     } else {
                         console.warn(`[EXCHANGE] User not found for balance update: ${user_id}`);
+                        try { addNotification({ userid: user_id, biaoti: 'Exchange Completed', neirong: `Your exchange record ${record.id} has been saved.`, sfyidu: 0 }); } catch(e){}
                     }
                 } catch (balanceErr) {
                     console.error('[EXCHANGE] Failed to update user balance:', balanceErr);
@@ -1832,8 +1909,13 @@ const server = http.createServer((req, res) => {
 
                         // Save updated users
                         fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+                        // Notify user about topup approval
+                        try {
+                            addNotification({ userid: record.user_id, biaoti: 'Topup Approved', neirong: `Your deposit of ${record.amount} ${record.coin || 'USDT'} has been approved.`, sfyidu: 0 });
+                        } catch (e) { /* best-effort only */ }
                     } else {
                         console.warn(`[ADMIN] User not found for topup approval: ${record.user_id}`);
+                        try { addNotification({ userid: record.user_id, biaoti: 'Topup Approved', neirong: `Your deposit record ${record.id} has been marked approved.`, sfyidu: 0 }); } catch(e){}
                     }
                 } catch (balanceErr) {
                     console.error('[ADMIN] Failed to update user balance:', balanceErr);
@@ -1906,6 +1988,11 @@ const server = http.createServer((req, res) => {
 
                 // Save to JSON file
                 fs.writeFileSync(topupRecordsPath, JSON.stringify(topupRecords, null, 2));
+                // Notify user about topup rejection
+                try {
+                    const rec = topupRecords[recordIndex];
+                    addNotification({ userid: rec.user_id, biaoti: 'Topup Rejected', neirong: `Your deposit request ${rec.id} was rejected.`, sfyidu: 0 });
+                } catch (e) { /* best-effort only */ }
 
                 console.log(`[ADMIN] Rejected topup record: ${id}`);
 
@@ -2054,6 +2141,12 @@ const server = http.createServer((req, res) => {
                     } catch (e) {
                         console.error('[admin kyc approve] failed to update users.json', e);
                     }
+
+                            // Notify the user about KYC approval
+                            try {
+                                const targetUserId = kyc[idx].userid;
+                                addNotification({ userid: targetUserId, biaoti: 'KYC Approved', neirong: `Your KYC (stage ${kyc[idx].stage}) has been approved.`, sfyidu: 0 });
+                            } catch (e) { /* best-effort only */ }
                 }
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2108,6 +2201,13 @@ const server = http.createServer((req, res) => {
                     } catch (e) {
                         console.error('[admin kyc reject] failed to update users.json', e);
                     }
+
+                            // Notify the user about KYC rejection
+                            try {
+                                const targetUserId = kyc[idx].userid;
+                                const reasonText = kyc[idx].reject_reason || '';
+                                addNotification({ userid: targetUserId, biaoti: 'KYC Rejected', neirong: `Your KYC was rejected. ${reasonText}`, sfyidu: 0 });
+                            } catch (e) { /* best-effort only */ }
                 }
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2196,8 +2296,13 @@ const server = http.createServer((req, res) => {
 
                         // Save updated users
                         fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+                        // Notify user about withdrawal completion
+                        try {
+                            addNotification({ userid: record.user_id, biaoti: 'Withdrawal Completed', neirong: `Your withdrawal of ${record.quantity} ${record.coin || ''} has been completed.`, sfyidu: 0 });
+                        } catch (e) { /* best-effort only */ }
                     } else {
                         console.warn(`[ADMIN] User not found for withdrawal completion: ${record.user_id}`);
+                        try { addNotification({ userid: record.user_id, biaoti: 'Withdrawal Completed', neirong: `Your withdrawal record ${record.id} has been marked completed.`, sfyidu: 0 }); } catch(e){}
                     }
                 } catch (balanceErr) {
                     console.error('[ADMIN] Failed to update user balance for withdrawal:', balanceErr);
@@ -2270,6 +2375,11 @@ const server = http.createServer((req, res) => {
 
                 // Save to JSON file
                 fs.writeFileSync(withdrawalRecordsPath, JSON.stringify(withdrawalRecords, null, 2));
+                // Notify user about withdrawal rejection
+                try {
+                    const rec = withdrawalRecords[recordIndex];
+                    addNotification({ userid: rec.user_id, biaoti: 'Withdrawal Rejected', neirong: `Your withdrawal request ${rec.id} was rejected.`, sfyidu: 0 });
+                } catch (e) { /* best-effort only */ }
 
                 console.log(`[ADMIN] Rejected withdrawal record: ${id}`);
 
@@ -2977,16 +3087,19 @@ const server = http.createServer((req, res) => {
                                     const user = users[uidx];
                                     const invested = parseFloat(trade.num) || 0;
                                     const profitRatio = 40; // Fixed 40% return on win
+                                    let settlementMessage = '';
                                     if (finalStatus === 'win') {
                                         const profit = Number((invested * (profitRatio / 100)).toFixed(2));
                                         const payout = Number((invested + profit).toFixed(2));
                                         user.balance = Number(((parseFloat(user.balance) || 0) + payout).toFixed(2));
                                         user.total_income = Number(((parseFloat(user.total_income) || 0) + profit).toFixed(2));
                                         console.error('[setordersy] ✓ WIN settlement applied: +' + profit + ' profit for user', uid);
+                                        settlementMessage = `Your trade ${trade.id} settled as WIN. You received ${payout} (profit ${profit}).`;
                                     } else {
                                         // loss: stake was already deducted at buy, nothing to add
                                         // but we can record loss in stats
                                         console.error('[setordersy] Loss settlement applied for user', uid);
+                                        settlementMessage = `Your trade ${trade.id} settled as LOSS.`;
                                     }
                                     users[uidx] = user;
                                     try { fs.writeFileSync(usersFile, JSON.stringify(users, null, 2)); } catch (e) { console.error('[setordersy] Error writing users.json:', e.message); }
@@ -3000,6 +3113,13 @@ const server = http.createServer((req, res) => {
                             // mark settlement applied so it isn't reapplied
                             trade.settlement_applied = true;
                             fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
+                            // Notify the user about trade settlement
+                            try {
+                                if (trade && trade.userid) {
+                                    const msg = settlementMessage || (`Your trade ${trade.id} has been settled: ${trade.status}`);
+                                    addNotification({ userid: trade.userid, biaoti: 'Trade Settled', neirong: msg, sfyidu: 0 });
+                                }
+                            } catch (e) { /* best-effort only */ }
                         }
                     }
                 }
@@ -4017,6 +4137,153 @@ const server = http.createServer((req, res) => {
                                 res.end(JSON.stringify({ code: 1, data: { renzhengzhuangtai: renzhengzhuangtai, sfsqrz: status } }));
                             } catch (err) {
                                 console.error('[api User getrzzt2] Error:', err);
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 0, info: 'Server error' }));
+                            }
+                        });
+                        return;
+                    }
+                    // Server-Sent Events (SSE) stream for notifications
+                    if ((pathname === '/User/notifyStream' || pathname === '/api/User/notifyStream') && req.method === 'GET') {
+                        try {
+                            // Prepare SSE response
+                            res.writeHead(200, {
+                                'Content-Type': 'text/event-stream',
+                                'Cache-Control': 'no-cache',
+                                'Connection': 'keep-alive'
+                            });
+                            res.write('\n');
+
+                            const userid = parsedUrl.query && (parsedUrl.query.userid || parsedUrl.query.user_id || '') || '';
+                            const client = { id: uuidv4(), userid: userid || null, res };
+                            sseClients.push(client);
+
+                            // Send initial batch (most recent 10)
+                            try {
+                                const allNotices = readNotificationsFile();
+                                let filtered = allNotices;
+                                if (userid) {
+                                    const hasUserScoped = allNotices.some(n => n.userid !== undefined && n.userid !== null);
+                                    if (hasUserScoped) filtered = allNotices.filter(n => String(n.userid) === String(userid));
+                                }
+                                filtered.sort((a,b) => (b.shijian||0) - (a.shijian||0));
+                                const initData = filtered.slice(0,10).map(n => ({ id: n.id, biaoti: n.biaoti, neirong: n.neirong, shijian: n.shijian, sfyidu: n.sfyidu }));
+                                res.write(`event: init\n`);
+                                res.write(`data: ${JSON.stringify(initData)}\n\n`);
+                            } catch (e) { /* ignore init errors */ }
+
+                            // Remove client on close
+                            req.on('close', () => {
+                                for (let i = 0; i < sseClients.length; i++) {
+                                    if (sseClients[i].id === client.id) { sseClients.splice(i, 1); break; }
+                                }
+                            });
+                        } catch (e) {
+                            console.error('[notifyStream] error', e && e.message ? e.message : e);
+                        }
+                        return;
+                    }
+
+                    // Notifications endpoint used by notify.html
+                    if ((pathname === '/User/getNotify' || pathname === '/api/User/getNotify') && req.method === 'POST') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk; });
+                        req.on('end', () => {
+                            try {
+                                // Parse body (JSON or urlencoded)
+                                let data = parseBodyString(body || '');
+                                const userid = data.userid || data.user_id || data.uid || '';
+                                let page = parseInt(data.page || 1, 10) || 1;
+                                if (page < 1) page = 1;
+                                const pageSize = 10;
+
+                                // Load notifications from file if present
+                                const notiFile = path.join(__dirname, 'notifications.json');
+                                let allNotices = [];
+                                if (fs.existsSync(notiFile)) {
+                                    try { allNotices = JSON.parse(fs.readFileSync(notiFile, 'utf8')) || []; } catch (e) { allNotices = []; }
+                                } else {
+                                    // Provide sample notices when none exist
+                                    const nowSec = Math.floor(Date.now() / 1000);
+                                    allNotices = [];
+                                    for (let i = 0; i < 8; i++) {
+                                        allNotices.push({
+                                            id: uuidv4(),
+                                            biaoti: `System Notice ${i+1}`,
+                                            neirong: `This is a sample notification message #${i+1}`,
+                                            shijian: nowSec - i * 3600,
+                                            sfyidu: i % 2 === 0 ? 0 : 1
+                                        });
+                                    }
+                                }
+
+                                // If notices have userid property, filter by userid; otherwise return global notices
+                                let filtered = allNotices;
+                                if (userid) {
+                                    const hasUserScoped = allNotices.some(n => n.userid !== undefined && n.userid !== null);
+                                    if (hasUserScoped) {
+                                        filtered = allNotices.filter(n => String(n.userid) === String(userid));
+                                    }
+                                }
+
+                                // Sort by time desc
+                                filtered.sort((a,b) => (b.shijian || 0) - (a.shijian || 0));
+
+                                // Paginate
+                                const start = (page - 1) * pageSize;
+                                const pageData = filtered.slice(start, start + pageSize).map(n => ({ id: n.id, biaoti: n.biaoti, neirong: n.neirong, shijian: n.shijian, sfyidu: (n.sfyidu===0?0:1) }));
+
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 1, data: pageData }));
+                            } catch (err) {
+                                console.error('[getNotify] Error:', err && err.message ? err.message : err);
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 0, info: 'Server error' }));
+                            }
+                        });
+                        return;
+                    }
+                    // Mark notification as read
+                    if ((pathname === '/User/markNotifyRead' || pathname === '/api/User/markNotifyRead') && req.method === 'POST') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk; });
+                        req.on('end', () => {
+                            try {
+                                const data = parseBodyString(body || '');
+                                const id = data.id || data.notify_id || data.nid;
+                                const userid = data.userid || data.user_id || data.uid || '';
+                                if (!id) {
+                                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                                    res.end(JSON.stringify({ code: 0, info: 'Missing id' }));
+                                    return;
+                                }
+                                const ok = markNotificationRead(id, userid);
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 1, data: { updated: ok ? 1 : 0 } }));
+                            } catch (err) {
+                                console.error('[markNotifyRead] error', err && err.message ? err.message : err);
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 0, info: 'Server error' }));
+                            }
+                        });
+                        return;
+                    }
+
+                    // Dev/admin helper: push a notification (for testing)
+                    if ((pathname === '/User/pushNotify' || pathname === '/api/User/pushNotify') && req.method === 'POST') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk; });
+                        req.on('end', () => {
+                            try {
+                                const data = parseBodyString(body || '');
+                                const userid = data.userid || data.user_id || null;
+                                const biaoti = data.biaoti || data.title || 'Notification';
+                                const neirong = data.neirong || data.content || data.msg || '';
+                                const item = addNotification({ userid, biaoti, neirong });
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ code: 1, data: item }));
+                            } catch (err) {
+                                console.error('[pushNotify] error', err && err.message ? err.message : err);
                                 res.writeHead(500, { 'Content-Type': 'application/json' });
                                 res.end(JSON.stringify({ code: 0, info: 'Server error' }));
                             }

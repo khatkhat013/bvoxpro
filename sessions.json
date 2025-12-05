@@ -12,5 +12,12 @@
     "sid": "19f89502d606dfc3",
     "createdAt": 1764952216941,
     "expiresAt": 1767544216941
+  },
+  "6ce31cf79bb1cdac701145635f1b7557": {
+    "userid": "342021",
+    "address": "0x11824f8b0f2fc92e84514eb1ec5a513a78812627",
+    "sid": "a792ead30f5861c5",
+    "createdAt": 1764971404331,
+    "expiresAt": 1767563404331
   }
 }
