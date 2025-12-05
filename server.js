@@ -14,7 +14,7 @@ const { saveTopupRecord, getUserTopupRecords } = require('./topupRecordModel');
 const { saveWithdrawalRecord, getUserWithdrawalRecords } = require('./withdrawalRecordModel');
 const { saveExchangeRecord, getUserExchangeRecords } = require('./exchangeRecordModel');
 const { getAllUsers, getUserById, updateUserBalance, getUserStats, addTopupRecord, addWithdrawalRecord, deleteTransaction, setUserFlag } = require('./adminModel');
-const { registerAdmin, loginAdmin, getAdminById, verifyToken } = require('./authModel');
+const { registerAdmin, loginAdmin, getAdminById, getAllAdmins, verifyToken } = require('./authModel');
 const { getAllArbitrageProducts, getArbitrageProductById, createArbitrageSubscription, getUserArbitrageSubscriptions, getUserArbitrageStats } = require('./arbitrageModel');
 const { settleArbitrageSubscriptions } = require('./arbitrageModel');
 const { connectWallet, verifyWallet, getWalletByUID, getUserByUID, getWalletByAddress } = require('./walletModel');
@@ -1296,6 +1296,95 @@ const server = http.createServer((req, res) => {
     }
 
     // ADMIN API ENDPOINTS
+    
+    // Get current admin info (requires valid token) - GET /api/admin/me
+    if (pathname === '/api/admin/me' && req.method === 'GET') {
+        try {
+            const authHeader = req.headers['authorization'] || '';
+            const token = authHeader.replace('Bearer ', '') || url.parse(req.url, true).query.token;
+            
+            if (!token) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'No token provided' }));
+                return;
+            }
+            
+            const decoded = verifyToken(token);
+            if (!decoded || !decoded.adminId) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid or expired token' }));
+                return;
+            }
+            
+            const admin = getAdminById(decoded.adminId);
+            if (!admin) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Admin not found' }));
+                return;
+            }
+            
+            // Return admin info without password
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                admin: {
+                    id: admin.id,
+                    fullname: admin.fullname,
+                    username: admin.username,
+                    email: admin.email,
+                    status: admin.status,
+                    created_at: admin.created_at,
+                    lastLogin: admin.lastLogin
+                }
+            }));
+        } catch (e) {
+            console.error('[admin-me] Error:', e.message);
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication failed' }));
+        }
+        return;
+    }
+
+    // Get all admin accounts (requires valid token) - GET /api/admin/list
+    if (pathname === '/api/admin/list' && req.method === 'GET') {
+        try {
+            const authHeader = req.headers['authorization'] || '';
+            const token = authHeader.replace('Bearer ', '') || url.parse(req.url, true).query.token;
+            
+            if (!token) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'No token provided' }));
+                return;
+            }
+            
+            const decoded = verifyToken(token);
+            if (!decoded || !decoded.adminId) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid or expired token' }));
+                return;
+            }
+            
+            const admins = getAllAdmins();
+            // Return admin list without passwords
+            const safeAdmins = admins.map(a => ({
+                id: a.id,
+                fullname: a.fullname,
+                username: a.username,
+                email: a.email,
+                status: a.status,
+                created_at: a.created_at,
+                lastLogin: a.lastLogin
+            }));
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, admins: safeAdmins }));
+        } catch (e) {
+            console.error('[admin-list] Error:', e.message);
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication failed' }));
+        }
+        return;
+    }
     
     // Get all users (admin)
     if (pathname === '/api/admin/users' && req.method === 'GET') {

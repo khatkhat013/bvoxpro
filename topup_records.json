@@ -178,5 +178,57 @@
     "timestamp": 1764955363517,
     "created_at": "2025-12-05T17:22:43.517Z",
     "updated_at": "2025-12-05T17:23:21.534Z"
+  },
+  {
+    "id": "topup_1764960758767_6kqot25nb",
+    "user_id": "342020",
+    "coin": "ETH",
+    "address": "0x32A0D8e76A032693756778ea0C91a79e3EFceEBe",
+    "photo_url": "/uploads/proof_1764960749704_9me8gdypf.png",
+    "amount": 100,
+    "status": "complete",
+    "timestamp": 1764960758767,
+    "created_at": "2025-12-05T18:52:38.767Z",
+    "updated_at": "2025-12-05T18:53:29.888Z"
+  },
+  {
+    "id": "1764961523631_wwf1jmx0q",
+    "user_id": "342020",
+    "coin": "USDT",
+    "amount": -1000,
+    "created_at": "2025-12-05T19:05:23.631Z",
+    "timestamp": 1764961523631
+  },
+  {
+    "id": "1764963833648_d0c5a2gd4",
+    "user_id": "342020",
+    "coin": "USDT",
+    "amount": -5000,
+    "created_at": "2025-12-05T19:43:53.648Z",
+    "timestamp": 1764963833648
+  },
+  {
+    "id": "1764964016015_n58xftndn",
+    "user_id": "342020",
+    "coin": "USDT",
+    "amount": -10000,
+    "created_at": "2025-12-05T19:46:56.015Z",
+    "timestamp": 1764964016015
+  },
+  {
+    "id": "1764964030703_o1nwi830n",
+    "user_id": "342020",
+    "coin": "USDT",
+    "amount": -50000,
+    "created_at": "2025-12-05T19:47:10.703Z",
+    "timestamp": 1764964030703
+  },
+  {
+    "id": "1764965032798_q0iwbjlde",
+    "user_id": "342020",
+    "coin": "USDT",
+    "amount": -5000,
+    "created_at": "2025-12-05T20:03:52.798Z",
+    "timestamp": 1764965032798
   }
 ]

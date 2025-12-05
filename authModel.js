@@ -2,8 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// Data file path
-const adminsFile = path.join(__dirname, '..', 'admins.json');
+// Data file path - prefer local `admins.json` in the repo root
+const adminsFile = path.join(__dirname, 'admins.json');
+const legacyAdminsFile = path.join(__dirname, '..', 'admins.json');
 
 /**
  * Hash password
@@ -58,15 +59,71 @@ function verifyToken(token) {
  */
 function getAllAdmins() {
     try {
-        if (!fs.existsSync(adminsFile)) {
-            return [];
+        let fileToRead = null;
+
+        // Prefer the local admins file; fall back to a legacy parent path if needed
+        if (fs.existsSync(adminsFile)) {
+            fileToRead = adminsFile;
+        } else if (fs.existsSync(legacyAdminsFile)) {
+            fileToRead = legacyAdminsFile;
         }
-        const data = fs.readFileSync(adminsFile, 'utf8');
-        return JSON.parse(data);
+
+        if (!fileToRead) return [];
+
+        console.log('[authModel] getAllAdmins will read admins file:', fileToRead);
+
+        const data = fs.readFileSync(fileToRead, 'utf8') || '[]';
+        let admins = JSON.parse(data);
+
+        console.log('[authModel] getAllAdmins parsed admins count:', Array.isArray(admins) ? admins.length : 0);
+
+        // Normalize admin IDs to Admin-### format if needed
+        const needsNormalization = admins.some(a => !/^Admin-\d{3}$/.test(String(a.id)));
+        if (needsNormalization) {
+            // Sort by created_at (oldest first) to assign stable IDs
+            admins.sort((x, y) => {
+                const tx = x && x.created_at ? new Date(x.created_at).getTime() : 0;
+                const ty = y && y.created_at ? new Date(y.created_at).getTime() : 0;
+                return tx - ty;
+            });
+
+            for (let i = 0; i < admins.length; i++) {
+                admins[i].id = 'Admin-' + String(i + 1).padStart(3, '0');
+            }
+
+            // Persist normalized admins to the preferred local file
+            try {
+                fs.writeFileSync(adminsFile, JSON.stringify(admins, null, 2));
+            } catch (e) {
+                console.error('[authModel] Failed to write normalized admins file:', e.message);
+            }
+        }
+
+        console.log('[authModel] getAllAdmins returning admin ids:', (admins || []).map(a => a && a.id).slice(0, 10));
+        return admins;
     } catch (e) {
         console.error('Error reading admins:', e);
         return [];
     }
+}
+
+/**
+ * Generate next admin ID in format Admin-001, Admin-002, ...
+ */
+function generateNextAdminId() {
+    const admins = getAllAdmins();
+    let maxNum = 0;
+    admins.forEach(a => {
+        if (!a || !a.id) return;
+        // look for trailing number in the id
+        const m = String(a.id).match(/(\d+)$/);
+        if (m && m[1]) {
+            const n = parseInt(m[1], 10);
+            if (Number.isFinite(n) && n > maxNum) maxNum = n;
+        }
+    });
+    const next = maxNum + 1;
+    return 'Admin-' + String(next).padStart(3, '0');
 }
 
 /**
@@ -102,7 +159,7 @@ function registerAdmin(fullname, username, email, password) {
     }
 
     const admin = {
-        id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9),
+        id: generateNextAdminId(),
         fullname: fullname,
         username: username,
         email: email,

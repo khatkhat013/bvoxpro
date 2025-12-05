@@ -96,5 +96,72 @@
     "status": "active",
     "startDate": "2025-12-05T00:35:48.532Z",
     "activationDate": "2025-12-05T00:35:48.532Z"
+  },
+  {
+    "id": "84da13ce-0814-4b8d-8dc1-22fba2f4b373",
+    "userid": "342020",
+    "username": "0x0fe540d4A96E378C9Fe68C5FaA8Fcf75803f03d6",
+    "stakedAmount": 0.5,
+    "currency": "ETH",
+    "dailyYield": 0.003,
+    "totalIncome": 0,
+    "todayIncome": 0,
+    "status": "redeemed",
+    "startDate": "2025-12-05T18:57:09.571Z",
+    "activationDate": "2025-12-05T18:57:09.571Z",
+    "updatedAt": "2025-12-05T18:58:30.915Z",
+    "redeemedAt": "2025-12-05T19:00:20.407Z"
+  },
+  {
+    "id": "b9c728c3-29f9-40ea-959a-a226a9fdda3e",
+    "userid": "342020",
+    "username": "0x0fe540d4A96E378C9Fe68C5FaA8Fcf75803f03d6",
+    "stakedAmount": 2,
+    "currency": "ETH",
+    "dailyYield": 0.004,
+    "totalIncome": 0,
+    "todayIncome": 0,
+    "status": "active",
+    "startDate": "2025-12-05T18:57:21.759Z",
+    "activationDate": "2025-12-05T18:57:21.759Z"
+  },
+  {
+    "id": "3ce281b6-4f28-4f79-a19f-4a6266dc033a",
+    "userid": "342020",
+    "username": "0x0fe540d4A96E378C9Fe68C5FaA8Fcf75803f03d6",
+    "stakedAmount": 12,
+    "currency": "ETH",
+    "dailyYield": 0.0045,
+    "totalIncome": 0,
+    "todayIncome": 0,
+    "status": "active",
+    "startDate": "2025-12-05T18:57:35.097Z",
+    "activationDate": "2025-12-05T18:57:35.097Z"
+  },
+  {
+    "id": "5b47b3ec-43c4-4428-86b5-13e7c79464c6",
+    "userid": "342020",
+    "username": "0x0fe540d4A96E378C9Fe68C5FaA8Fcf75803f03d6",
+    "stakedAmount": 20,
+    "currency": "ETH",
+    "dailyYield": 0.005,
+    "totalIncome": 0,
+    "todayIncome": 0,
+    "status": "active",
+    "startDate": "2025-12-05T18:57:44.485Z",
+    "activationDate": "2025-12-05T18:57:44.485Z"
+  },
+  {
+    "id": "db7ce007-06e1-4e79-aad2-e64b14633b2d",
+    "userid": "342020",
+    "username": "0x0fe540d4A96E378C9Fe68C5FaA8Fcf75803f03d6",
+    "stakedAmount": 40,
+    "currency": "ETH",
+    "dailyYield": 0.006,
+    "totalIncome": 0,
+    "todayIncome": 0,
+    "status": "active",
+    "startDate": "2025-12-05T18:57:57.017Z",
+    "activationDate": "2025-12-05T18:57:57.017Z"
   }
 ]

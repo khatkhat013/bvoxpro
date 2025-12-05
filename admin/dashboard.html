@@ -1219,6 +1219,19 @@
     </style>
 </head>
 <body>
+    <script>
+        // Enforce admin authentication: redirect to login if token missing/expired
+        (function(){
+            try{
+                const token = localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken');
+                if(!token) { window.location.href = 'login.html'; return; }
+                const parts = token.split('.');
+                if(parts.length !== 3) { localStorage.removeItem('adminToken'); sessionStorage.removeItem('adminToken'); window.location.href='login.html'; return; }
+                const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+                if(!payload || !payload.exp || payload.exp < Math.floor(Date.now()/1000)) { localStorage.removeItem('adminToken'); sessionStorage.removeItem('adminToken'); window.location.href='login.html'; return; }
+            }catch(e){ localStorage.removeItem('adminToken'); sessionStorage.removeItem('adminToken'); window.location.href='login.html'; }
+        })();
+    </script>
     <div class="dashboard-container">
         <!-- Sidebar -->
         <div class="sidebar">
@@ -1260,6 +1273,10 @@
                     <button class="header-btn user-list-btn" onclick="goToUserList()">
                         <span class="btn-icon">👥</span>
                         User List
+                    </button>
+                    <button class="header-btn user-list-btn" onclick="goToAdmins()" title="Admin List">
+                        <span class="btn-icon">🛠️</span>
+                        Admin List
                     </button>
                     <button class="header-btn profile-btn" onclick="goToProfile()">
                         <span class="btn-icon">👤</span>
@@ -1572,6 +1589,21 @@
                     console.warn('Profile page not available, showing local info instead');
                     const adminName = localStorage.getItem('adminName') || 'Admin';
                     alert(`Admin Profile:\nName: ${adminName}\n\nProfile page is not yet configured.`);
+                });
+        }
+
+        function goToAdmins() {
+            const adminsUrl = 'admins-management.html';
+            fetch(adminsUrl)
+                .then(response => {
+                    if (response.ok) {
+                        window.location.href = adminsUrl;
+                    } else {
+                        alert('Admin list page not found.');
+                    }
+                })
+                .catch(err => {
+                    alert('Admin list page not available.');
                 });
         }
 
