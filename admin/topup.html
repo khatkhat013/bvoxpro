@@ -704,18 +704,13 @@
             // Map status: "approved" -> "complete", "rejected" -> "rejected"
             const dbStatus = newStatus === 'approved' ? 'complete' : newStatus;
             
-            // Determine API endpoint (use config for proper base URL)
+            // Determine API endpoint
             let apiUrl;
-            const apiBase = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
-                ? API_CONFIG.baseURL 
-                : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                    ? 'http://localhost:3000/api'
-                    : '/api');
             
             if (newStatus === 'approved') {
-                apiUrl = apiBase + '/admin/topup/approve';
+                apiUrl = '/api/admin/topup/approve';
             } else if (newStatus === 'rejected') {
-                apiUrl = apiBase + '/admin/topup/reject';
+                apiUrl = '/api/admin/topup/reject';
             } else {
                 button.disabled = false;
                 button.textContent = originalText;

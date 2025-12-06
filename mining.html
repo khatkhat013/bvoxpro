@@ -193,13 +193,8 @@
 
                 console.log('🔄 Fetching mining stats for user:', userid);
 
-                // Get API base URL dynamically
-                const apiBase = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
-                    ? API_CONFIG.baseURL 
-                    : 'http://localhost:3000/api';
-
                 $.ajax({
-                    url: apiBase + '/Mine/getminesy',
+                    url: '/api/Mine/getminesy',
                     type: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify({
@@ -377,14 +372,9 @@
                 $('.y-ex-dner').hide();
                 $('.y-ex-dqr').hide();
 
-                // Get API base URL dynamically
-                const apiBase2 = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
-                    ? API_CONFIG.baseURL 
-                    : 'http://localhost:3000/api';
-
                 // Submit to backend
                 $.ajax({
-                    url: apiBase2 + '/Mine/setmineorder',
+                    url: '/api/Mine/setmineorder',
                     type: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify({

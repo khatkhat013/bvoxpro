@@ -207,18 +207,13 @@ allRecords=allRecords.map(r=>({...r,display_id:idMap[r.id]||r.id}));filteredReco
       button.disabled=true;
       button.textContent='Processing...';
       
-      // Determine API endpoint (use config for proper base URL)
+      // Determine API endpoint
       let apiUrl;
-      const apiBase = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
-          ? API_CONFIG.baseURL 
-          : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-              ? 'http://localhost:3000/api'
-              : '/api');
       
       if(newStatus==='completed' || newStatus==='complete'){
-        apiUrl = apiBase + '/admin/withdrawal/complete';
+        apiUrl = '/api/admin/withdrawal/complete';
       }else if(newStatus==='rejected'){
-        apiUrl = apiBase + '/admin/withdrawal/reject';
+        apiUrl = '/api/admin/withdrawal/reject';
       }else{
         button.disabled=false;
         button.textContent=originalText;
