@@ -3315,9 +3315,9 @@ const server = http.createServer((req, res) => {
                     
                     if (trade && trade.status && trade.status !== 'pending') {
                         if (trade.status === 'win') {
-                            // Calculate profit using fixed 40% rate (set in UI, not sent to backend)
+                            // Calculate profit using stored profit ratio from trade
                             const investedAmount = parseFloat(trade.num) || 0;
-                            const profitPercent = 40; // Fixed 40% return on win
+                            const profitPercent = parseFloat(trade.syl) || 40; // Use stored profit ratio from trade
                             profit = (investedAmount * (profitPercent / 100)).toFixed(2);
                         } else if (trade.status === 'loss') {
                             profit = '-' + parseFloat(trade.num).toFixed(2);
