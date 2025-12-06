@@ -14,7 +14,7 @@ class WalletAuthSystem {
 
 // --- Web3Modal connect hook ---
 // Ensure mobile WalletConnect deep-link flows create backend user records
-;(function attachWeb3ModalConnectHook() {
+(function attachWeb3ModalConnectHook() {
     try {
         const W = window.Web3Modal && window.Web3Modal.default;
         if (!W || W.__connectHookApplied) return;
