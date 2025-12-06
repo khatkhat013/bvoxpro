@@ -1344,18 +1344,22 @@ const server = http.createServer((req, res) => {
 
                     // compute payout (ying)
                     // For LOSS: ying = -num (negative amount for display in red)
-                    // For WIN: ying = num + profit (using stored profit percentage from trade.syl)
+                    // For WIN: ying = num + profit
                     // For PENDING: ying = num (no change)
                     let ying = num;
                     if (isloss === 1) {
                         // Loss: show negative amount
                         ying = -num;
                     } else if (zuizhong === 1) {
-                        // Win: calculate profit using stored syl percentage, then show profit only (NEW LOGIC)
-                        const profitRatio = parseFloat(trade.syl) || 40; // Use stored profit percentage
-                        const profit = Number((num * (profitRatio / 100)).toFixed(2));
-                        // NEW: On WIN, ying shows only the profit added (not quantity + profit)
-                        ying = profit;
+                        // Win: use recorded fields if available
+                        if (trade.payout) ying = Number(trade.payout);
+                        else if (trade.settled_amount) ying = Number(trade.settled_amount);
+                        else if (trade.profit) ying = Number(num) + Number(trade.profit);
+                        else {
+                            // approximate using a default profit ratio (40%) to match server settlement logic
+                            const profit = Number((num * 0.4).toFixed(2));
+                            ying = Number((num + profit).toFixed(2));
+                        }
                     }
 
                     // buytime: convert created_at to unix timestamp seconds
@@ -4507,14 +4511,48 @@ const server = http.createServer((req, res) => {
                 return;
             }
 
+            // Use file stats (mtime/size) to provide conditional responses
+            try {
+                const mtime = stats && stats.mtime ? new Date(stats.mtime) : null;
+                const size = stats && typeof stats.size === 'number' ? stats.size : (data ? data.length : 0);
+                const etag = `"${size}-${mtime ? mtime.getTime() : Date.now()}"`;
+                if (mtime) res.setHeader('Last-Modified', mtime.toUTCString());
+                res.setHeader('ETag', etag);
+
+                // Honor conditional requests to return 304 when not modified
+                const ifNoneMatch = req.headers['if-none-match'];
+                const ifModifiedSince = req.headers['if-modified-since'];
+                if (ifNoneMatch && String(ifNoneMatch) === etag) {
+                    res.writeHead(304);
+                    res.end();
+                    return;
+                }
+                if (ifModifiedSince && mtime) {
+                    const ims = new Date(ifModifiedSince).getTime();
+                    if (!isNaN(ims) && mtime.getTime() <= ims) {
+                        res.writeHead(304);
+                        res.end();
+                        return;
+                    }
+                }
+            } catch (e) {
+                // ignore header generation errors and continue to serve file
+            }
+
             // Add caching headers for static assets
-            // Do not cache JSON files to ensure admin changes are immediately visible
+            // Do not cache JSON files or HTML files to ensure admin and page changes are visible
+            const longLivedExts = ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.woff', '.ttf', '.otf', '.wasm'];
             if (ext === '.json') {
                 res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-            } else if (ext !== '.html') {
-                res.setHeader('Cache-Control', 'public, max-age=3600');
-            } else {
+            } else if (ext === '.html') {
                 res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            } else if (longLivedExts.includes(ext)) {
+                // These assets are safe to cache for a long time when they are fingerprinted.
+                // Use one year + immutable to allow aggressive browser caching.
+                res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            } else {
+                // Default short cache for other static files
+                res.setHeader('Cache-Control', 'public, max-age=86400');
             }
 
             res.writeHead(200, { 'Content-Type': contentType });

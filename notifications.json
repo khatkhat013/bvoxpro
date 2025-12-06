@@ -70,5 +70,21 @@
     "neirong": "You exchanged 2502331.39 USDT → 2502331.39 USDC.",
     "shijian": 1764980638,
     "sfyidu": 0
+  },
+  {
+    "id": "48c8a2a1-fcd2-4659-ac0f-15c9708f8f85",
+    "userid": "342020",
+    "biaoti": "Exchange Completed",
+    "neirong": "You exchanged 20000 USDT → 20000 PYUSD.",
+    "shijian": 1764980677,
+    "sfyidu": 0
+  },
+  {
+    "id": "6f2dd053-dc7e-4a9a-ac08-926ddd172b7b",
+    "userid": "342020",
+    "biaoti": "Exchange Completed",
+    "neirong": "You exchanged 25000 USDT → 100 SOL.",
+    "shijian": 1764980695,
+    "sfyidu": 0
   }
 ]
