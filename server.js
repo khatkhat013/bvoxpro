@@ -1114,6 +1114,165 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // Get all transactions for financial records page: /api/Record/getTransactions
+    if ((pathname === '/api/Record/getTransactions' || pathname === '/api/record/getTransactions') && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                let data = {};
+                if (body && body.includes('{')) {
+                    try { data = JSON.parse(body); } catch (e) { /* fallthrough */ }
+                }
+                if (Object.keys(data).length === 0) {
+                    body.split('&').forEach(pair => {
+                        if (!pair) return;
+                        const parts = pair.split('=');
+                        const key = decodeURIComponent(parts[0] || '').trim();
+                        const val = decodeURIComponent((parts[1] || '').replace(/\+/g, ' ')).trim();
+                        if (key) data[key] = val;
+                    });
+                }
+
+                const userid = data.userid || data.user_id || data.uid;
+                const type = parseInt(data.type || '0');
+                const page = Number(data.page || 1) || 1;
+                const pageSize = 10;
+
+                if (!userid) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ code: 0, data: [], message: 'Missing userid' }));
+                    return;
+                }
+
+                // Collect all transactions from different sources
+                let allTransactions = [];
+
+                // 1. Topup records
+                if (type === 0 || type === 3) {
+                    try {
+                        const topupPath = path.join(__dirname, 'topup_records.json');
+                        if (fs.existsSync(topupPath)) {
+                            const topupData = JSON.parse(fs.readFileSync(topupPath, 'utf8')) || [];
+                            topupData.forEach(r => {
+                                if (String(r.user_id) === String(userid) || String(r.userid) === String(userid)) {
+                                    allTransactions.push({
+                                        gaibian: 3,
+                                        bizhong: r.coin || 'USDT',
+                                        jine: r.amount || r.quantity || 0,
+                                        shijian: Math.floor(new Date(r.timestamp || r.created_at || Date.now()).getTime() / 1000)
+                                    });
+                                }
+                            });
+                        }
+                    } catch (e) { /* skip */ }
+                }
+
+                // 2. Withdrawal records
+                if (type === 0 || type === 4) {
+                    try {
+                        const withdrawPath = path.join(__dirname, 'withdrawal_records.json');
+                        if (fs.existsSync(withdrawPath)) {
+                            const withdrawData = JSON.parse(fs.readFileSync(withdrawPath, 'utf8')) || [];
+                            withdrawData.forEach(r => {
+                                if (String(r.user_id) === String(userid) || String(r.userid) === String(userid)) {
+                                    allTransactions.push({
+                                        gaibian: 4,
+                                        bizhong: r.coin || 'USDT',
+                                        jine: r.amount || r.quantity || 0,
+                                        shijian: Math.floor(new Date(r.timestamp || r.created_at || Date.now()).getTime() / 1000)
+                                    });
+                                }
+                            });
+                        }
+                    } catch (e) { /* skip */ }
+                }
+
+                // 3. Exchange records
+                if (type === 0 || type === 8 || type === 9) {
+                    try {
+                        const exchangePath = path.join(__dirname, 'exchange_records.json');
+                        if (fs.existsSync(exchangePath)) {
+                            const exchangeData = JSON.parse(fs.readFileSync(exchangePath, 'utf8')) || [];
+                            exchangeData.forEach(r => {
+                                if (String(r.user_id) === String(userid) || String(r.userid) === String(userid)) {
+                                    // Both out (8) and in (9) from same exchange record
+                                    allTransactions.push({
+                                        gaibian: 8,  // Cash out
+                                        bizhong: r.from_coin || 'USDT',
+                                        jine: r.from_amount || r.quantity || 0,
+                                        shijian: Math.floor(new Date(r.timestamp || r.created_at || Date.now()).getTime() / 1000)
+                                    });
+                                    allTransactions.push({
+                                        gaibian: 9,  // Cash in
+                                        bizhong: r.to_coin || 'USDT',
+                                        jine: r.to_amount || r.received || 0,
+                                        shijian: Math.floor(new Date(r.timestamp || r.created_at || Date.now()).getTime() / 1000)
+                                    });
+                                }
+                            });
+                        }
+                    } catch (e) { /* skip */ }
+                }
+
+                // 4. Arbitrage subscriptions (records 5, 6, 7)
+                if (type === 0 || type === 5 || type === 6 || type === 7) {
+                    try {
+                        const arbiPath = path.join(__dirname, 'arbitrage_subscriptions.json');
+                        if (fs.existsSync(arbiPath)) {
+                            const arbiData = JSON.parse(fs.readFileSync(arbiPath, 'utf8')) || [];
+                            arbiData.forEach(r => {
+                                if (String(r.userId) === String(userid)) {
+                                    // Purchase (5)
+                                    allTransactions.push({
+                                        gaibian: 5,
+                                        bizhong: 'USDT',
+                                        jine: r.amount || 0,
+                                        shijian: r.subscriptionDate || Math.floor(Date.now() / 1000)
+                                    });
+                                    // Income (6) if settled and won
+                                    if (r.settled && r.won) {
+                                        allTransactions.push({
+                                            gaibian: 6,
+                                            bizhong: 'USDT',
+                                            jine: r.income || 0,
+                                            shijian: Math.floor(new Date(r.maturityDate * 1000).getTime() / 1000)
+                                        });
+                                    }
+                                    // Refund (7) if settled and lost
+                                    if (r.settled && !r.won) {
+                                        allTransactions.push({
+                                            gaibian: 7,
+                                            bizhong: 'USDT',
+                                            jine: r.amount || 0,
+                                            shijian: Math.floor(new Date(r.maturityDate * 1000).getTime() / 1000)
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                    } catch (e) { /* skip */ }
+                }
+
+                // Sort by time descending
+                allTransactions.sort((a, b) => b.shijian - a.shijian);
+
+                // Paginate
+                const startIdx = (page - 1) * pageSize;
+                const endIdx = startIdx + pageSize;
+                const paginatedTransactions = allTransactions.slice(startIdx, endIdx);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 1, data: paginatedTransactions }));
+            } catch (e) {
+                console.error('[/Record/getTransactions] Error:', e);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ code: 0, data: [], message: 'Server error' }));
+            }
+        });
+        return;
+    }
+
     // Legacy alias: some pages call /api/Record/getloan — rewrite to Wallet/getloaned
     if ((pathname === '/api/Record/getloan' || pathname === '/api/record/getloan') && req.method === 'POST') {
         pathname = '/api/Wallet/getloaned';

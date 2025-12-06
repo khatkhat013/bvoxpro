@@ -36,12 +36,12 @@ function translateGaibian(gaibian) {
 
 (function() {
     window.alert = function (message) {
-    // 避免重复弹窗
+    // Avoid repeated alerts
     if (document.querySelector('#customAlertBox')) return;
 
     const alertBox = document.createElement('div');
     alertBox.id = 'customAlertBox';
-    alertBox.innerText = 'Bvox Notice\n\n' + message;
+    alertBox.innerText = 'BVOX Notice\n\n' + message;
 
     // 设置内联样式（含换行控制）
     Object.assign(alertBox.style, {
