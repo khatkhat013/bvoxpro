@@ -98,8 +98,13 @@
 
                 var userid = Cookies.get('userid');
                 
+                // Get API base URL dynamically
+                const apiBase = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
+                    ? API_CONFIG.baseURL 
+                    : 'http://localhost:3000/api';
+                
                 $.ajax({
-                    url: '/api/Wallet/getbalance',
+                    url: apiBase + '/Wallet/getbalance',
                     type: 'POST',
                     dataType: 'json',
                     data: {
@@ -113,9 +118,9 @@
                         }
                     },
                     error: function(err){
-                        console.error('Error fetching balance:', err);
-                        // Retry with relative path
-                        $.post("/api/Wallet/getbalance",{
+                        console.error('Error fetching balance from localhost:', err);
+                        // Fallback to external API
+                        $.post(apiurl + "/Wallet/getbalance",{
                             'userid':userid,
                             'bm':biming
                         },function(res){
