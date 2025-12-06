@@ -128,7 +128,7 @@
 
             function loadTransactions() {
                 $.ajax({
-                    url: apiurl + '/Record/getTransactions', // 后端接口URL
+                    url: '/Record/getTransactions', // 后端接口URL
                     type: 'POST',
                     data: {
                         userid: userId,

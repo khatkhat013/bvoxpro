@@ -72,7 +72,7 @@
 						renderContractsList(my);
 					}).fail(function(){
 						// fallback: try via api route
-						$.post(apiurl + '/trade/records', { userid: uid }, function(resp){
+						$.post('/trade/records', { userid: uid }, function(resp){
 							if(resp && resp.code==1) renderContractsList(resp.data);
 						}).fail(function(){ alert('Unable to load records'); });
 					});
@@ -518,7 +518,7 @@
 		function gettradlist(){
 			
 
-			$.post(apiurl + "/Trade/gettradlist",{
+			$.post('/Trade/gettradlist",{
 				'coinname':coinname
 			},function(data){
 				if(data.code == 1){
@@ -552,7 +552,7 @@
 		}
 
 		function getcoin_data(){
-			$.post(apiurl + "/Trade/getcoin_data",{
+			$.post('/Trade/getcoin_data",{
 				'coinname':coinname
 			},function(data){
 						if(data.code == 1 && data.data && data.data.close != null){
@@ -680,7 +680,7 @@
     			generateTargets();
     
     			$.ajax({
-                    url: apiurl + '/trade/buy',
+                    url: '/trade/buy',
                     type: 'POST',
                     data: {
                         'userid': userid,
@@ -746,7 +746,7 @@
 
 		function getorder(id,miaoshu,fangxiang){
 			$.ajax({
-                url: apiurl + '/trade/getorder',
+                url: '/trade/getorder',
                 type: 'POST',
                 data: {
                     'id': id
@@ -850,7 +850,7 @@
 
 		function setordersy(id,shuying){
 			$.ajax({
-                url: apiurl + '/trade/setordersy',
+                url: '/trade/setordersy',
                 type: 'POST',
                 data: {
                     'id': id,
@@ -865,7 +865,7 @@
 
 		function getorderjs(){
 			$.ajax({
-                url: apiurl + '/trade/getorderjs',
+                url: '/trade/getorderjs',
                 type: 'POST',
                 data: {
                     'id': dqid,
@@ -900,7 +900,7 @@
 										shuying = 1;
 									}
 									// persist result to server so records update
-									$.post(apiurl + '/trade/setordersy', { id: dqid, shuying: shuying }, function(sr){
+									$.post('/trade/setordersy', { id: dqid, shuying: shuying }, function(sr){
 										// now show UI based on shuying
 										if(shuying == 1){
 											const profitPercent = parseInt($('#y-hysc').text()) || parseInt($('#y-syl').val()) || 40;

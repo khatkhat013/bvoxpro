@@ -160,7 +160,7 @@
 
                 // First time: fetch all records for user
                 $.ajax({
-                    url: apiurl + '/Mine/records/' + encodeURIComponent(userid),
+                    url: '/Mine/records/' + encodeURIComponent(userid),
                     type: 'GET',
                     dataType: 'json',
                     success: function(res) {
@@ -192,7 +192,7 @@
                 if (confirm("Are you sure?")) {
 
                     $.ajax({
-                        url: apiurl + '/Mine/shuhui',
+                        url: '/Mine/shuhui',
                         type: 'POST',
                         data: {
                             id: id,
@@ -221,7 +221,7 @@
                 }
 
                 $.ajax({
-                    url: apiurl + '/Mine/getminesy',
+                    url: '/Mine/getminesy',
                     type: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify({ userid: userid, username: username }),
@@ -254,7 +254,7 @@
                 if (!userid || !recordsCache) return;
 
                 $.ajax({
-                    url: apiurl + '/Mine/records/' + encodeURIComponent(userid),
+                    url: '/Mine/records/' + encodeURIComponent(userid),
                     type: 'GET',
                     dataType: 'json',
                     success: function(res) {

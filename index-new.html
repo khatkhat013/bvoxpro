@@ -257,7 +257,7 @@
             $('#y-usid').text(userId);
 
             // Load user status from API
-            $.post(apiurl + "/Wallet/getuserzt", {
+            $.post('/Wallet/getuserzt", {
                 'userid': userId,
             }, function(res) {
                 if (res.code == 1) {
@@ -302,7 +302,7 @@
             }
 
             $.ajax({
-                url: apiurl + '/user/getuserid2',
+                url: '/user/getuserid2',
                 type: 'POST',
                 data: {
                     'yaddress': address,

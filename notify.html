@@ -69,7 +69,7 @@
                 const userid = Cookies.get('userid'); // 获取用户ID，假设已存储在Cookie中
 
                 $.ajax({
-                    url: apiurl + '/User/getNotify',
+                    url: '/User/getNotify',
                     type: 'POST',
                     data: {
                         userid: userid,
@@ -136,7 +136,7 @@
                 }
 
                 $.ajax({
-                    url: apiurl + '/User/markNotifyRead',
+                    url: '/User/markNotifyRead',
                     type: 'POST',
                     data: { userid: userid, id: id },
                     dataType: 'json',
@@ -158,7 +158,7 @@
                     const userid = Cookies.get('userid') || '';
                     if (!!window.EventSource) {
                         try {
-                            const streamUrl = apiurl + '/User/notifyStream' + (userid ? ('?userid=' + encodeURIComponent(userid)) : '');
+                            const streamUrl = '/User/notifyStream' + (userid ? ('?userid=' + encodeURIComponent(userid)) : '');
                             const es = new EventSource(streamUrl);
 
                             es.addEventListener('init', function(e) {

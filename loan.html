@@ -170,7 +170,7 @@
                 var username = Cookies.get('username');
                 
                 $.ajax({
-                    url: apiurl + '/Wallet/getloaned',
+                    url: '/Wallet/getloaned',
                     type: 'POST',
                     data: {
                         'userid': userid,
@@ -210,7 +210,7 @@
                         formData.append('file', fileInput.files[0]);
 
                         $.ajax({
-                            url: apiurl + '/Wallet/upload_image',
+                            url: '/Wallet/upload_image',
                             type: 'POST',
                             data: formData,
                             contentType: false,
@@ -315,7 +315,7 @@
 
                 // 发送 AJAX 请求
                 $.ajax({
-                    url: apiurl + '/Wallet/addloan',
+                    url: '/Wallet/addloan',
                     type: 'POST',
                     data: {
                         userid: userid,

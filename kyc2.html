@@ -71,7 +71,7 @@
 
                 var userid = Cookies.get('userid');
                 $.ajax({
-                    url: apiurl + '/User/getrzzt2',
+                    url: '/User/getrzzt2',
                     type: 'POST',
                     data: {
                         userid: userid
@@ -114,7 +114,7 @@
                         formData.append('file', fileInput.files[0]);
 
                         $.ajax({
-                            url: apiurl + '/Wallet/upload_image',
+                            url: '/Wallet/upload_image',
                             type: 'POST',
                             data: formData,
                             contentType: false,
@@ -147,7 +147,7 @@
                 }
                 
                 $.ajax({
-                    url: apiurl + '/User/setuserrz2',
+                    url: '/User/setuserrz2',
                     type: 'POST',
                     data: {
                         userid: userid,

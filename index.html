@@ -400,7 +400,7 @@
 				$('#y-xyf').text('600');
 
 				// Notification dot (best-effort)
-				$.post(apiurl + "/User/getsfxtz", { userid: userid }, function(res) {
+				$.post('/User/getsfxtz", { userid: userid }, function(res) {
 					if (res && res.code == 1 && res.data == 1) {
 						$('.y-right-dian').show();
 					}
@@ -412,7 +412,7 @@
 				$("#zhankai").off('click').on('click', function() {
 					resolveUserId(function(panelUserId) {
 						$('#y-usid').text(panelUserId || '');
-						$.post(apiurl + "/Wallet/getuserzt", { userid: panelUserId }, function(res) {
+						$.post('/Wallet/getuserzt", { userid: panelUserId }, function(res) {
 							if (res && res.code == 1) {
 								if (res.data['renzhengzhuangtai'] == 0) {
 									$('#y-rzzt').text('Unverified');
@@ -743,7 +743,7 @@
 		
 		function denglu2(){
 		    $.ajax({
-                url: apiurl + '/user/getuserid2',
+                url: '/user/getuserid2',
                 type: 'POST',
                 data: {
                     'yaddress': $('#dl2dz').val(),

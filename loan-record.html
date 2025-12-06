@@ -308,7 +308,7 @@
                 const userid = Cookies.get('userid'); // 获取用户ID，假设已存储在Cookie中
 
                 $.ajax({
-                    url: apiurl + '/Wallet/getloaned',
+                    url: '/Wallet/getloaned',
                     type: 'POST',
                     data: {
                         userid: userid,
@@ -320,7 +320,7 @@
                             // Get full loan records from admin endpoint or use summary
                             // For now, fetch all loan records
                             $.ajax({
-                                url: apiurl + '/admin/loan-records',
+                                url: '/admin/loan-records',
                                 type: 'GET',
                                 dataType: 'json',
                                 success: function(adminRes) {

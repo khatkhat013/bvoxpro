@@ -93,7 +93,7 @@
 
                 // Use legacy arbitrage subscriptions endpoint
                 $.ajax({
-                    url: apiurl + '/arbitrage/subscriptions?user_id=' + encodeURIComponent(userid),
+                    url: '/arbitrage/subscriptions?user_id=' + encodeURIComponent(userid),
                     type: 'GET',
                     dataType: 'json',
                     success: function(res) {
