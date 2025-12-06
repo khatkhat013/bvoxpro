@@ -73,6 +73,29 @@
                 return text;
             }
 
+            // Transaction type mapping function
+            function translateGaibian(gaibian) {
+                const typeMap = {
+                    1: 'Seconds contract order',
+                    2: 'Seconds settlement',
+                    3: 'Top-up',
+                    4: 'Withdrawal',
+                    5: 'Buy AI arbitrage',
+                    6: 'AI arbitrage income',
+                    7: 'AI set recycling',
+                    8: 'Cash out',
+                    9: 'Cash in',
+                    21: 'System bonus',
+                    22: 'Mining reward',
+                    23: 'Loan received',
+                    24: 'Loan repayment',
+                    25: 'Referral bonus',
+                    26: 'Dividend income',
+                    27: 'Promotion reward'
+                };
+                return typeMap[gaibian] || 'Unknown transaction';
+            }
+
 
             $(document).ready(function() {
                 // Load translations from local en.json
