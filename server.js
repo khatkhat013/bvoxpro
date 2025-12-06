@@ -1344,22 +1344,18 @@ const server = http.createServer((req, res) => {
 
                     // compute payout (ying)
                     // For LOSS: ying = -num (negative amount for display in red)
-                    // For WIN: ying = num + profit
+                    // For WIN: ying = num + profit (using stored profit percentage from trade.syl)
                     // For PENDING: ying = num (no change)
                     let ying = num;
                     if (isloss === 1) {
                         // Loss: show negative amount
                         ying = -num;
                     } else if (zuizhong === 1) {
-                        // Win: use recorded fields if available
-                        if (trade.payout) ying = Number(trade.payout);
-                        else if (trade.settled_amount) ying = Number(trade.settled_amount);
-                        else if (trade.profit) ying = Number(num) + Number(trade.profit);
-                        else {
-                            // approximate using a default profit ratio (40%) to match server settlement logic
-                            const profit = Number((num * 0.4).toFixed(2));
-                            ying = Number((num + profit).toFixed(2));
-                        }
+                        // Win: calculate profit using stored syl percentage, then show profit only (NEW LOGIC)
+                        const profitRatio = parseFloat(trade.syl) || 40; // Use stored profit percentage
+                        const profit = Number((num * (profitRatio / 100)).toFixed(2));
+                        // NEW: On WIN, ying shows only the profit added (not quantity + profit)
+                        ying = profit;
                     }
 
                     // buytime: convert created_at to unix timestamp seconds
@@ -2833,23 +2829,11 @@ const server = http.createServer((req, res) => {
                         return;
                     }
 
-                    // Deduct stake immediately from the most appropriate field
-                    if (user.balances && (typeof user.balances.usdt !== 'undefined')) {
-                        user.balances.usdt = Number((parseFloat(user.balances.usdt || 0) - stake).toFixed(2));
-                    } else if (user.balances) {
-                        const kb = Object.keys(user.balances || {});
-                        const usdtKey = kb.find(k => k.toLowerCase() === 'usdt');
-                        if (usdtKey) {
-                            user.balances[usdtKey] = Number((parseFloat(user.balances[usdtKey] || 0) - stake).toFixed(2));
-                        } else {
-                            // fallback to legacy user.balance
-                            user.balance = Number((currentBalance - stake).toFixed(2));
-                        }
-                    } else {
-                        // legacy fallback
-                        user.balance = Number((currentBalance - stake).toFixed(2));
-                    }
-
+                    // DO NOT deduct stake at trade creation
+                    // Balance will only be adjusted at settlement:
+                    // - On LOSS: stake will be deducted
+                    // - On WIN: profit will be added (not the full payout)
+                    
                     user.total_invested = Number((parseFloat(user.total_invested || 0) + stake).toFixed(2));
                     users[userIndex] = user;
                     try { fs.writeFileSync(usersFile, JSON.stringify(users, null, 2)); } catch (e) { console.error('[trade-buy] Error writing users.json:', e.message); }
@@ -3249,17 +3233,17 @@ const server = http.createServer((req, res) => {
                                     const profitRatio = parseFloat(trade.syl) || 40; // Use stored profit ratio from trade
                                     let settlementMessage = '';
                                     if (finalStatus === 'win') {
+                                        // On WIN: Add only the profit amount (not the full payout)
                                         const profit = Number((invested * (profitRatio / 100)).toFixed(2));
-                                        const payout = Number((invested + profit).toFixed(2));
-                                        user.balance = Number(((parseFloat(user.balance) || 0) + payout).toFixed(2));
+                                        user.balance = Number(((parseFloat(user.balance) || 0) + profit).toFixed(2));
                                         user.total_income = Number(((parseFloat(user.total_income) || 0) + profit).toFixed(2));
                                         console.error('[setordersy] ✓ WIN settlement applied: +' + profit + ' profit for user', uid);
-                                        settlementMessage = `Your trade ${trade.id} settled as WIN. You received ${payout} (profit ${profit}).`;
+                                        settlementMessage = `Your trade ${trade.id} settled as WIN. You received ${profit} profit.`;
                                     } else {
-                                        // loss: stake was already deducted at buy, nothing to add
-                                        // but we can record loss in stats
-                                        console.error('[setordersy] Loss settlement applied for user', uid);
-                                        settlementMessage = `Your trade ${trade.id} settled as LOSS.`;
+                                        // On LOSS: Deduct the full stake/invested amount
+                                        user.balance = Number(((parseFloat(user.balance) || 0) - invested).toFixed(2));
+                                        console.error('[setordersy] ✓ LOSS settlement applied: -' + invested + ' stake deducted for user', uid);
+                                        settlementMessage = `Your trade ${trade.id} settled as LOSS. Stake of ${invested} has been deducted.`;
                                     }
                                     users[uidx] = user;
                                     try { fs.writeFileSync(usersFile, JSON.stringify(users, null, 2)); } catch (e) { console.error('[setordersy] Error writing users.json:', e.message); }
