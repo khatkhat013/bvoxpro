@@ -100,6 +100,45 @@ function copyToClipboard(text) {
     return text;
 }
 
+// Global delegated handler for copy-address buttons
+// Usage in HTML: <button class="copy-address" data-copy-address="0xabc...">Copy address</button>
+// or: <button class="copy-address" data-copy-target="#addrField">Copy</button>
+document.addEventListener('click', function (e) {
+    try {
+        const btn = e.target.closest && e.target.closest('.copy-address, [data-copy-address], [data-copy-target]');
+        if (!btn) return;
+        // determine text to copy
+        let text = btn.getAttribute('data-copy-address') || '';
+        const target = btn.getAttribute('data-copy-target') || btn.getAttribute('data-target');
+        if (!text && target) {
+            const el = document.querySelector(target);
+            if (el) text = el.value || el.textContent || el.getAttribute('data-address') || '';
+        }
+        if (!text) return;
+
+        // Prefer modern Clipboard API
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(text).then(() => {
+                // small visual feedback
+                btn.classList.add('copied');
+                const old = btn.innerText;
+                btn.innerText = 'Copied';
+                setTimeout(() => { btn.innerText = old; btn.classList.remove('copied'); }, 1500);
+            }).catch(() => {
+                copyToClipboard(text);
+            });
+        } else {
+            copyToClipboard(text);
+            btn.classList.add('copied');
+            const old = btn.innerText;
+            btn.innerText = 'Copied';
+            setTimeout(() => { btn.innerText = old; btn.classList.remove('copied'); }, 1500);
+        }
+    } catch (err) {
+        // silent
+    }
+});
+
 // Utility: Format currency values
 function formatCurrency(value, decimals = 2) {
     if (!value) return '0.00';

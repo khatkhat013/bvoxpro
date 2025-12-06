@@ -3239,13 +3239,49 @@ const server = http.createServer((req, res) => {
                                     if (finalStatus === 'win') {
                                         // On WIN: Add only the profit amount (not the full payout)
                                         const profit = Number((invested * (profitRatio / 100)).toFixed(2));
+                                        // Update top-level balance (legacy) and per-coin balances when available
                                         user.balance = Number(((parseFloat(user.balance) || 0) + profit).toFixed(2));
                                         user.total_income = Number(((parseFloat(user.total_income) || 0) + profit).toFixed(2));
+
+                                        // Credit to USDT wallet by default (profit is paid in USDT); fallback to trade.biming if USDT absent
+                                        try {
+                                            if (!user.balances) user.balances = {};
+                                            const preferred = 'usdt';
+                                            let coinKey = preferred;
+                                            if (!(preferred in user.balances)) {
+                                                coinKey = (trade.biming || preferred).toString().toLowerCase();
+                                            }
+                                            const prev = parseFloat(user.balances[coinKey] || 0) || 0;
+                                            // Use 2 decimals for stablecoins (usdt/usdc/pyusd), otherwise 8
+                                            const decimals = (coinKey === 'usdt' || coinKey === 'usdc' || coinKey === 'pyusd') ? 2 : 8;
+                                            user.balances[coinKey] = Number((prev + profit).toFixed(decimals));
+                                            console.error('[setordersy] Updated user.balances.' + coinKey + ': ' + prev + ' -> ' + user.balances[coinKey]);
+                                        } catch (e) {
+                                            console.error('[setordersy] Error crediting per-coin balance:', e && e.message ? e.message : e);
+                                        }
+
                                         console.error('[setordersy] ✓ WIN settlement applied: +' + profit + ' profit for user', uid);
                                         settlementMessage = `Your trade ${trade.id} settled as WIN. You received ${profit} profit.`;
                                     } else {
                                         // On LOSS: Deduct the full stake/invested amount
                                         user.balance = Number(((parseFloat(user.balance) || 0) - invested).toFixed(2));
+
+                                        // Deduct stake from USDT wallet by default (stake is paid in USDT); fallback to trade.biming if USDT absent
+                                        try {
+                                            if (!user.balances) user.balances = {};
+                                            const preferred = 'usdt';
+                                            let coinKey = preferred;
+                                            if (!(preferred in user.balances)) {
+                                                coinKey = (trade.biming || preferred).toString().toLowerCase();
+                                            }
+                                            const prev = parseFloat(user.balances[coinKey] || 0) || 0;
+                                            const decimals = (coinKey === 'usdt' || coinKey === 'usdc' || coinKey === 'pyusd') ? 2 : 8;
+                                            user.balances[coinKey] = Number((prev - invested).toFixed(decimals));
+                                            console.error('[setordersy] Updated user.balances.' + coinKey + ': ' + prev + ' -> ' + user.balances[coinKey]);
+                                        } catch (e) {
+                                            console.error('[setordersy] Error deducting per-coin balance:', e && e.message ? e.message : e);
+                                        }
+
                                         console.error('[setordersy] ✓ LOSS settlement applied: -' + invested + ' stake deducted for user', uid);
                                         settlementMessage = `Your trade ${trade.id} settled as LOSS. Stake of ${invested} has been deducted.`;
                                     }
@@ -4553,6 +4589,129 @@ const server = http.createServer((req, res) => {
             } else {
                 // Default short cache for other static files
                 res.setHeader('Cache-Control', 'public, max-age=86400');
+            }
+
+            // If serving HTML, inject a copy-to-clipboard handler
+            if (ext === '.html') {
+                try {
+                    let html = data.toString('utf8');
+                    const inject = `
+<!-- injected: copy-to-clipboard handler -->
+<script>
+(function() {
+  document.addEventListener('click', function(event) {
+    try {
+      // Find the closest button/div with copy data attributes
+      var btn = event.target.closest && event.target.closest('[data-copy-address], [data-copy-target], .copy-address, .copy-btn');
+      if (!btn) return;
+      
+      // Extract text to copy from various sources
+      var text = btn.getAttribute('data-copy-address') || '';
+      var target = btn.getAttribute('data-copy-target') || btn.getAttribute('data-target') || '';
+      
+      // If no direct address, try selector
+      if (!text && target) {
+        var el = document.querySelector(target);
+        if (el) {
+          text = (el.value || el.textContent || el.getAttribute('data-address') || '').trim();
+        }
+      }
+      
+      // Fallback: search in nearby input/textarea
+      if (!text && btn.closest) {
+        var parent = btn.closest('div');
+        if (parent) {
+          var input = parent.querySelector('input, textarea, p, span');
+          if (input) {
+            text = (input.value || input.textContent || '').trim();
+          }
+        }
+      }
+      
+      if (!text) {
+        console.warn('[copy] No text found to copy');
+        return;
+      }
+      
+      console.log('[copy] Copying text:', text.substring(0, 50) + '...');
+      
+      // Function to show feedback
+      var showFeedback = function() {
+        try {
+          var oldText = btn.innerText || btn.textContent;
+          btn.innerText = 'Copied!';
+          btn.style.opacity = '0.7';
+          setTimeout(function() {
+            btn.innerText = oldText;
+            btn.style.opacity = '1';
+          }, 1500);
+        } catch (e) {
+          console.error('[copy] Feedback error:', e);
+        }
+      };
+      
+      // Try Clipboard API first
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(text)
+          .then(function() {
+            console.log('[copy] ✓ Clipboard API success');
+            showFeedback();
+          })
+          .catch(function(err) {
+            console.warn('[copy] Clipboard API failed, trying fallback:', err);
+            // Fallback to execCommand
+            var tempInput = document.createElement('textarea');
+            tempInput.value = text;
+            tempInput.style.position = 'fixed';
+            tempInput.style.opacity = '0';
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            try {
+              document.execCommand('copy');
+              console.log('[copy] ✓ execCommand success');
+              showFeedback();
+            } catch (e) {
+              console.error('[copy] execCommand failed:', e);
+            }
+            document.body.removeChild(tempInput);
+          });
+      } else {
+        // Fallback for older browsers
+        var tempInput = document.createElement('textarea');
+        tempInput.value = text;
+        tempInput.style.position = 'fixed';
+        tempInput.style.opacity = '0';
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        try {
+          document.execCommand('copy');
+          console.log('[copy] ✓ execCommand success (no Clipboard API)');
+          showFeedback();
+        } catch (e) {
+          console.error('[copy] execCommand failed:', e);
+        }
+        document.body.removeChild(tempInput);
+      }
+    } catch (err) {
+      console.error('[copy] Unexpected error:', err);
+    }
+  }, false);
+})();
+</script>
+`;
+                    // Insert before </body> if present, otherwise append
+                    if (html.indexOf('</body>') !== -1) {
+                        html = html.replace('</body>', inject + '</body>');
+                    } else {
+                        html = html + inject;
+                    }
+                    res.writeHead(200, { 'Content-Type': contentType });
+                    res.end(html);
+                    return;
+                } catch (e) {
+                    console.error('[copy-inject] Error:', e && e.message ? e.message : e);
+                    // fallback to sending raw data
+                }
             }
 
             res.writeHead(200, { 'Content-Type': contentType });
