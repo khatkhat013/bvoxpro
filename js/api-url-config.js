@@ -24,8 +24,15 @@
         apiBase = window.location.protocol + '//' + window.location.host + '/api';
     }
     
-    // Set both window.apiurl and API_CONFIG.baseURL to the correct value
-    window.apiurl = apiBase;
+    // Override the existing apiurl variable (don't redeclare it)
+    // This works because apiurl is declared as 'var' in downloaded config.js
+    if (typeof apiurl !== 'undefined') {
+        apiurl = apiBase;
+    } else {
+        window.apiurl = apiBase;
+    }
+    
+    // Always set API_CONFIG.baseURL
     window.API_CONFIG.baseURL = apiBase;
     
     console.log('[API Config Override] Set apiurl and API_CONFIG.baseURL to:', apiBase);
