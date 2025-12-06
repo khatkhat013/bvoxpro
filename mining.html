@@ -7,6 +7,7 @@
 		<link rel="stylesheet" href="./mining_files/style.css">
 		<script src="./mining_files/jquery.js.download" type="text/javascript" charset="utf-8"></script>
 		<script src="./mining_files/config.js.download" type="text/javascript" charset="utf-8"></script><script src="./mining_files/pako.min.js.download"></script><script src="./mining_files/js.cookie.min.js.download"></script><script src="./mining_files/web3.min.js.download"></script><script src="./mining_files/web3model.min.js.download"></script><script src="./mining_files/web3provider.js.download"></script><script src="./mining_files/fp.min.js.download"></script>
+		<script src="./js/config.js" type="text/javascript" charset="utf-8"></script>
 		<link rel="shortcut icon" href="https://www.bvoxf.com/favicon.ico">
 		<meta property="og:image" content="/favicon.png">
 
@@ -192,8 +193,13 @@
 
                 console.log('🔄 Fetching mining stats for user:', userid);
 
+                // Get API base URL dynamically
+                const apiBase = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
+                    ? API_CONFIG.baseURL 
+                    : 'http://localhost:3000/api';
+
                 $.ajax({
-                    url: 'http://localhost:3000/api/Mine/getminesy',
+                    url: apiBase + '/Mine/getminesy',
                     type: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify({
@@ -371,9 +377,14 @@
                 $('.y-ex-dner').hide();
                 $('.y-ex-dqr').hide();
 
+                // Get API base URL dynamically
+                const apiBase2 = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
+                    ? API_CONFIG.baseURL 
+                    : 'http://localhost:3000/api';
+
                 // Submit to backend
                 $.ajax({
-                    url: 'http://localhost:3000/api/Mine/setmineorder',
+                    url: apiBase2 + '/Mine/setmineorder',
                     type: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify({

@@ -7,6 +7,7 @@
 		<link rel="stylesheet" href="./out_files/style.css">
 		<script src="./out_files/jquery.js.download" type="text/javascript" charset="utf-8"></script>
 		<script src="./out_files/config.js.download" type="text/javascript" charset="utf-8"></script><script src="./out_files/pako.min.js.download"></script><script src="./out_files/js.cookie.min.js.download"></script><script src="./out_files/web3.min.js.download"></script><script src="./out_files/web3model.min.js.download"></script><script src="./out_files/web3provider.js.download"></script><script src="./out_files/fp.min.js.download"></script>
+		<script src="./js/config.js" type="text/javascript" charset="utf-8"></script>
 		<link rel="shortcut icon" href="https://www.bvoxf.com/favicon.ico">
 		<meta property="og:image" content="/favicon.png">
 
@@ -96,8 +97,14 @@
                 $('#y-out-shuliang').attr('placeholder', gy('请输入数量'));
 
                 var userid = Cookies.get('userid');
+                
+                // Get API base URL dynamically
+                const apiBase = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
+                    ? API_CONFIG.baseURL 
+                    : 'http://localhost:3000/api';
+                
                 $.ajax({
-                    url: 'http://localhost:3000/api/Wallet/getbalance',
+                    url: apiBase + '/Wallet/getbalance',
                     type: 'POST',
                     dataType: 'json',
                     data: {

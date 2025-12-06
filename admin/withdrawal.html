@@ -99,6 +99,7 @@
   </div>
 
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="../js/config.js"></script>
   <script>
     let allRecords = [];
     let filteredRecords = [];
@@ -206,12 +207,18 @@ allRecords=allRecords.map(r=>({...r,display_id:idMap[r.id]||r.id}));filteredReco
       button.disabled=true;
       button.textContent='Processing...';
       
-      // Determine API endpoint
+      // Determine API endpoint (use config for proper base URL)
       let apiUrl;
+      const apiBase = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
+          ? API_CONFIG.baseURL 
+          : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+              ? 'http://localhost:3000/api'
+              : '/api');
+      
       if(newStatus==='completed' || newStatus==='complete'){
-        apiUrl='http://localhost:3000/api/admin/withdrawal/complete';
+        apiUrl = apiBase + '/admin/withdrawal/complete';
       }else if(newStatus==='rejected'){
-        apiUrl='http://localhost:3000/api/admin/withdrawal/reject';
+        apiUrl = apiBase + '/admin/withdrawal/reject';
       }else{
         button.disabled=false;
         button.textContent=originalText;

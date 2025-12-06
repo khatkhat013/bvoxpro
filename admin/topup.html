@@ -581,6 +581,7 @@
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="../js/config.js"></script>
     <script>
         let allRecords = [];
         let filteredRecords = [];
@@ -703,12 +704,18 @@
             // Map status: "approved" -> "complete", "rejected" -> "rejected"
             const dbStatus = newStatus === 'approved' ? 'complete' : newStatus;
             
-            // Determine API endpoint
+            // Determine API endpoint (use config for proper base URL)
             let apiUrl;
+            const apiBase = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
+                ? API_CONFIG.baseURL 
+                : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                    ? 'http://localhost:3000/api'
+                    : '/api');
+            
             if (newStatus === 'approved') {
-                apiUrl = 'http://localhost:3000/api/admin/topup/approve';
+                apiUrl = apiBase + '/admin/topup/approve';
             } else if (newStatus === 'rejected') {
-                apiUrl = 'http://localhost:3000/api/admin/topup/reject';
+                apiUrl = apiBase + '/admin/topup/reject';
             } else {
                 button.disabled = false;
                 button.textContent = originalText;

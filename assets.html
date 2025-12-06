@@ -6,6 +6,7 @@
 		<link rel="stylesheet" href="./assets_files/style.css">
 		<script src="./assets_files/jquery.js.download" type="text/javascript" charset="utf-8"></script>
 		<script src="./assets_files/config.js.download" type="text/javascript" charset="utf-8"></script><script src="./assets_files/pako.min.js.download"></script><script src="./assets_files/js.cookie.min.js.download"></script><script src="./assets_files/web3.min.js.download"></script><script src="./assets_files/web3model.min.js.download"></script><script src="./assets_files/web3provider.js.download"></script><script src="./assets_files/fp.min.js.download"></script>
+		<script src="./js/config.js" type="text/javascript" charset="utf-8"></script>
 		<script src="./js/auth-check.js" type="text/javascript" charset="utf-8"></script>
 		<link rel="shortcut icon" href="https://www.bvoxf.com/favicon.ico">
 		<meta property="og:image" content="/favicon.png">
@@ -307,8 +308,13 @@
             var userid = Cookies.get('userid');
             console.log('🔄 Starting updateje() for user:', userid);
             
+            // Get API base URL dynamically
+            const apiBase = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
+                ? API_CONFIG.baseURL 
+                : 'http://localhost:3000/api';
+            
             $.ajax({
-                url: 'http://localhost:3000/api/Wallet/getbalance',
+                url: apiBase + '/Wallet/getbalance',
                 type: 'POST',
                 dataType: 'json',
                 data: { 'userid': userid },
@@ -331,7 +337,7 @@
                         
                         // Fetch crypto prices from local endpoint with timeout
                         $.ajax({
-                            url: 'http://localhost:3000/api/Wallet/getcoin_all_data',
+                            url: apiBase + '/Wallet/getcoin_all_data',
                             type: 'POST',
                             dataType: 'json',
                             data: {},
