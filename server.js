@@ -2736,7 +2736,7 @@ const server = http.createServer((req, res) => {
                 console.log('[trade-buy] Raw body snippet:', body && body.substring(0, 200));
                 const data = parseBodyString(body);
                 console.log('[trade-buy] Parsed body object:', data);
-                const { userid, username, fangxiang, miaoshu, biming, num, buyprice, zengjia, jianshao } = data;
+                const { userid, username, fangxiang, miaoshu, biming, num, buyprice, syl, zengjia, jianshao } = data;
 
                 if (!userid || !username || !biming || !num || !buyprice) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -2754,6 +2754,7 @@ const server = http.createServer((req, res) => {
                     miaoshu,
                     num,
                     buyprice,
+                    syl: parseFloat(syl) || 40,
                     zengjia,
                     jianshao,
                     status: 'pending',
@@ -3245,7 +3246,7 @@ const server = http.createServer((req, res) => {
                                 if (uidx !== -1) {
                                     const user = users[uidx];
                                     const invested = parseFloat(trade.num) || 0;
-                                    const profitRatio = 40; // Fixed 40% return on win
+                                    const profitRatio = parseFloat(trade.syl) || 40; // Use stored profit ratio from trade
                                     let settlementMessage = '';
                                     if (finalStatus === 'win') {
                                         const profit = Number((invested * (profitRatio / 100)).toFixed(2));
@@ -3359,7 +3360,7 @@ const server = http.createServer((req, res) => {
                                                     fs.writeFileSync(tradesFilePath, JSON.stringify(tradesData, null, 2));
                                                     // Calculate profit for response
                                                     if (trade.status === 'win') {
-                                                        const profitRatio = 40; // Fixed 40% return on win
+                                                        const profitRatio = parseFloat(trade.syl) || 40; // Use stored profit ratio from trade
                                                         const investedAmount = parseFloat(trade.num) || 0;
                                                         profit = (investedAmount * (profitRatio / 100)).toFixed(2);
                                                     } else {
@@ -3640,7 +3641,7 @@ const server = http.createServer((req, res) => {
                                 if (uidx !== -1) {
                                     const user = users[uidx];
                                     const invested = parseFloat(trade.num) || 0;
-                                    const profitRatio = 40; // Fixed 40% return on win
+                                    const profitRatio = parseFloat(trade.syl) || 40; // Use stored profit ratio from trade
                                     const profit = Number((invested * (profitRatio / 100)).toFixed(2));
                                     const payout = Number((invested + profit).toFixed(2));
                                     user.balance = Number(((parseFloat(user.balance) || 0) + payout).toFixed(2));
