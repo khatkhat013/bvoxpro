@@ -308,10 +308,10 @@
             var userid = Cookies.get('userid');
             console.log('🔄 Starting updateje() for user:', userid);
             
-            // Get API base URL dynamically
+            // Get API base URL dynamically; default to production API
             const apiBase = (typeof API_CONFIG !== 'undefined' && API_CONFIG.baseURL) 
                 ? API_CONFIG.baseURL 
-                : 'http://localhost:3000/api';
+                : 'https://bvoxpro.tech/api';
             
             $.ajax({
                 url: apiBase + '/Wallet/getbalance',
