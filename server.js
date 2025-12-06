@@ -1007,6 +1007,9 @@ const server = http.createServer((req, res) => {
             const queryParams = url.parse(req.url, true).query;
             const userid = queryParams.userid || queryParams.user_id;
 
+            console.log('[getbalance-GET] Query params:', queryParams);
+            console.log('[getbalance-GET] userid:', userid);
+
             if (!userid) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ code: 0, error: 'Missing userid parameter', success: false }));
@@ -1014,6 +1017,8 @@ const server = http.createServer((req, res) => {
             }
 
             const user = getUserById(userid);
+            console.log('[getbalance-GET] Found user:', user);
+            
             if (!user) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ code: 0, error: 'User not found', success: false }));
@@ -1034,6 +1039,8 @@ const server = http.createServer((req, res) => {
                     sol: balances.sol || user.sol || 0
                 }
             };
+
+            console.log('[getbalance-GET] Returning balance:', balanceData);
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(balanceData));
@@ -1073,6 +1080,10 @@ const server = http.createServer((req, res) => {
                 }
                 const userid = data.userid || data.user_id;
                 
+                console.log('[getbalance] Request body:', body);
+                console.log('[getbalance] Parsed data:', data);
+                console.log('[getbalance] userid:', userid);
+                
                 if (!userid) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ code: 0, error: 'Missing userid parameter', success: false }));
@@ -1081,6 +1092,8 @@ const server = http.createServer((req, res) => {
                 
                 // Get user from database
                 const user = getUserById(userid);
+                
+                console.log('[getbalance] Found user:', user);
                 
                 if (!user) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -1102,6 +1115,8 @@ const server = http.createServer((req, res) => {
                         sol: balances.sol || user.sol || 0
                     }
                 };
+                
+                console.log('[getbalance] Returning balance:', balanceData);
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(balanceData));
@@ -1830,6 +1845,34 @@ const server = http.createServer((req, res) => {
         const users = getAllUsers();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, users }));
+        return;
+    }
+
+    // Debug endpoint: Check a specific user's balance
+    if ((pathname === '/api/debug/user-balance' || pathname === '/api/Debug/user-balance') && req.method === 'GET') {
+        try {
+            const queryParams = url.parse(req.url, true).query;
+            const userid = queryParams.userid || queryParams.user_id;
+
+            console.log('[DEBUG] Checking balance for userid:', userid);
+
+            const allUsers = getAllUsers();
+            console.log('[DEBUG] Total users in database:', allUsers.length);
+            console.log('[DEBUG] All user IDs:', allUsers.map(u => u.userid));
+
+            const user = getUserById(userid);
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                request_userid: userid,
+                found_user: user ? true : false,
+                user_data: user,
+                total_users: allUsers.length
+            }));
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+        }
         return;
     }
 
