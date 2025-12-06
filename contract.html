@@ -6,6 +6,43 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 		<link rel="stylesheet" href="./contract_files/style.css">
 		<script src="./contract_files/jquery.js.download" type="text/javascript" charset="utf-8"></script>
+		<!-- Override only getbalance requests to use local API for this page -->
+		<script type="text/javascript">
+		(function(){
+			if (typeof $ === 'undefined') return;
+			var _origAjax = $.ajax;
+			$.ajax = function(options){
+				try{
+					var opts = options;
+					// support $.ajax(url, settings) and $.ajax(settings)
+					if (typeof options === 'string'){
+						opts = { url: options };
+					}
+					if (opts && typeof opts.url === 'string' && opts.url.indexOf('Wallet/getbalance') !== -1) {
+						opts = Object.assign({}, opts);
+						opts.url = 'http://localhost:3000/api/Wallet/getbalance';
+					}
+					return _origAjax.call(this, opts);
+				}catch(e){
+					return _origAjax.apply(this, arguments);
+				}
+			};
+			// Also patch $.post to catch shorthand calls
+			if ($.post){
+				var _origPost = $.post;
+				$.post = function(url){
+					try{
+						if (typeof url === 'string' && url.indexOf('Wallet/getbalance') !== -1){
+							arguments[0] = 'http://localhost:3000/api/Wallet/getbalance';
+						}
+						return _origPost.apply(this, arguments);
+					}catch(e){
+						return _origPost.apply(this, arguments);
+					}
+				};
+			}
+		})();
+		</script>
 		<script src="./contract_files/config.js.download" type="text/javascript" charset="utf-8"></script><script src="./contract_files/pako.min.js.download"></script><script src="./contract_files/js.cookie.min.js.download"></script><script src="./contract_files/web3.min.js.download"></script><script src="./contract_files/web3model.min.js.download"></script><script src="./contract_files/web3provider.js.download"></script><script src="./contract_files/fp.min.js.download"></script>
 		<script src="./js/config.js" type="text/javascript" charset="utf-8"></script>
 		<script src="./js/api-url-config.js" type="text/javascript" charset="utf-8"></script>
