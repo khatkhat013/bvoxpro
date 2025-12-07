@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const { getUserById, updateUserBalance, addTopupRecord } = require('./admin/adminModel');
 
 // Data file path
 const arbitrageFile = path.join(__dirname, 'arbitrage_products.json');
@@ -113,29 +112,6 @@ function createArbitrageSubscription(userId, productId, amount) {
 
     if (amount < product.min_amount || amount > product.max_amount) {
         throw new Error(`Amount must be between $${product.min_amount} and $${product.max_amount}`);
-    }
-
-    // Ensure user exists and has sufficient USDT balance, then deduct the invested amount immediately
-    const user = getUserById(userId);
-    if (!user) {
-        throw new Error('User not found');
-    }
-
-    const currentUsdt = (user.balances && user.balances.usdt) ? parseFloat(user.balances.usdt) : 0;
-    const investAmount = parseFloat(amount);
-
-    if (currentUsdt < investAmount) {
-        throw new Error('Insufficient USDT balance');
-    }
-
-    // Deduct principal from user's balance and record the debit as a negative topup for audit
-    const newUsdt = Math.round((currentUsdt - investAmount) * 100) / 100;
-    updateUserBalance(String(userId), 'usdt', newUsdt);
-    try {
-        // Log as a negative topup record so admin can see debits/credits in the same ledger
-        addTopupRecord(String(userId), 'USDT', -investAmount);
-    } catch (e) {
-        console.error('Failed to write invest ledger record', e);
     }
 
     const subscription = {
@@ -263,61 +239,6 @@ module.exports = {
     getUserArbitrageSubscriptions,
     getAllArbitrageSubscriptions,
     calculateArbitrageIncome,
-    // settle subscriptions and credit incomes
-    settleArbitrageSubscriptions: function() {
-        const subscriptionFile = path.join(__dirname, 'arbitrage_subscriptions.json');
-        let subscriptions = [];
-        try {
-            if (fs.existsSync(subscriptionFile)) {
-                subscriptions = JSON.parse(fs.readFileSync(subscriptionFile, 'utf8'));
-            }
-        } catch (e) {
-            console.error('Error reading subscriptions for settlement:', e);
-            return [];
-        }
-
-        let changed = false;
-        const now = new Date();
-
-        subscriptions.forEach(sub => {
-            try {
-                if (sub.status !== 'active') return;
-                const income = calculateArbitrageIncome(sub);
-                sub.daily_income = income.daily;
-                sub.total_income = income.total;
-
-                const endDate = new Date(sub.end_date);
-                if (endDate <= now) {
-                    // mark completed and credit user with total income
-                    sub.status = 'completed';
-
-                    // credit user's USDT balance (if user exists)
-                    const user = getUserById(sub.user_id);
-                    if (user) {
-                        const current = (user.balances && user.balances.usdt) ? parseFloat(user.balances.usdt) : 0;
-                        const newBalance = Math.round((current + income.total) * 100) / 100;
-                        updateUserBalance(String(sub.user_id), 'usdt', newBalance);
-                        // record topup for audit
-                        addTopupRecord(String(sub.user_id), 'usdt', income.total);
-                    }
-                }
-
-                changed = true;
-            } catch (e) {
-                console.error('Error settling subscription', sub && sub.id, e);
-            }
-        });
-
-        if (changed) {
-            try {
-                fs.writeFileSync(subscriptionFile, JSON.stringify(subscriptions, null, 2));
-            } catch (e) {
-                console.error('Error writing settled subscriptions:', e);
-            }
-        }
-
-        return subscriptions;
-    },
     getUserArbitrageStats,
     initializeArbitrageProducts
 };

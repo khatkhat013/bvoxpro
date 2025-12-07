@@ -1,36 +1,27 @@
 [
   {
-    "userid": "342016",
-    "uid": "342016",
-    "wallet_address": "0x742d35cc6634c0532925a3b844bc9e7595f12345",
-    "username": "user_342016",
-    "email": null,
-    "balance": 0,
-    "total_invested": 0,
-    "total_income": 0,
-    "balances": {
-      "usdt": 39517,
-      "btc": 2,
-      "eth": 1.162,
-      "usdc": 5001,
-      "pyusd": 3000,
-      "sol": 1008
-    },
+    "userid": "37282",
+    "username": "user37282",
+    "email": "user@example.com",
     "created_at": "2024-01-15T10:30:00Z",
-    "last_login": "2024-01-15T10:30:00Z",
+    "balances": {
+      "usdt": 10000,
+      "btc": 3,
+      "eth": 52.36600000000012,
+      "usdc": 5000,
+      "pyusd": 3000,
+      "sol": 1000
+    },
     "status": "active",
-    "kycStatus": "basic",
-    "force_trade_win": "true"
+    "usdt": 6123,
+    "btc": 231,
+    "usdc": 5000
   },
   {
-    "userid": "342017",
-    "uid": "342017",
-    "wallet_address": "0x873d35cc6634c0532925a3b844bc9e7595f54321",
-    "username": "user_342017",
-    "email": null,
-    "balance": 0,
-    "total_invested": 0,
-    "total_income": 0,
+    "userid": "37283",
+    "username": "user37283",
+    "email": "user2@example.com",
+    "created_at": "2024-02-20T14:15:00Z",
     "balances": {
       "usdt": 5000,
       "btc": 1,
@@ -39,19 +30,13 @@
       "pyusd": 1500,
       "sol": 500
     },
-    "created_at": "2024-02-20T14:15:00Z",
-    "last_login": "2024-02-20T14:15:00Z",
     "status": "active"
   },
   {
-    "userid": "342018",
-    "uid": "342018",
-    "wallet_address": "0x984d35cc6634c0532925a3b844bc9e7595faaaa",
-    "username": "user_342018",
-    "email": null,
-    "balance": 0,
-    "total_invested": 0,
-    "total_income": 0,
+    "userid": "37284",
+    "username": "user37284",
+    "email": "user3@example.com",
+    "created_at": "2024-03-10T08:45:00Z",
     "balances": {
       "usdt": 15000,
       "btc": 3,
@@ -60,97 +45,6 @@
       "pyusd": 5000,
       "sol": 2000
     },
-    "created_at": "2024-03-10T08:45:00Z",
-    "last_login": "2024-03-10T08:45:00Z",
     "status": "active"
-  },
-  {
-    "userid": "342019",
-    "uid": "342019",
-    "wallet_address": "0x69b1a0ec8dcd88fa62df8e045b91b1d2fde5c669",
-    "username": "user_342019",
-    "email": null,
-    "balance": 0,
-    "total_invested": 0,
-    "total_income": 0,
-    "balances": {
-      "usdt": 0,
-      "btc": 0,
-      "eth": 0,
-      "usdc": 0,
-      "pyusd": 0,
-      "sol": 0
-    },
-    "created_at": "2025-12-05T16:12:48.658Z",
-    "last_login": "2025-12-05T16:12:48.658Z",
-    "status": "active",
-    "kycStatus": "none"
-  },
-  {
-    "userid": "342020",
-    "uid": "342020",
-    "wallet_address": "0x0fe540d4a96e378c9fe68c5faa8fcf75803f03d6",
-    "username": "user_342020",
-    "email": null,
-    "balance": 2785032.52,
-    "total_invested": 54200,
-    "total_income": 2766982.52,
-    "balances": {
-      "usdt": 31802,
-      "btc": 1330,
-      "eth": 231.5231428600024,
-      "usdc": 2512331.39,
-      "pyusd": 20000,
-      "sol": 100
-    },
-    "created_at": "2025-12-05T16:30:16.939Z",
-    "last_login": "2025-12-05T16:30:16.939Z",
-    "status": "active",
-    "kycStatus": "none",
-    "force_trade_win": true
-  },
-  {
-    "userid": "342021",
-    "uid": "342021",
-    "wallet_address": "0x11824f8b0f2fc92e84514eb1ec5a513a78812627",
-    "username": "user_342021",
-    "email": null,
-    "balance": 0,
-    "total_invested": 0,
-    "total_income": 0,
-    "balances": {
-      "usdt": 0,
-      "btc": 0,
-      "eth": 0,
-      "usdc": 0,
-      "pyusd": 0,
-      "sol": 0
-    },
-    "created_at": "2025-12-05T21:50:04.299Z",
-    "last_login": "2025-12-05T21:50:04.299Z",
-    "status": "active",
-    "kycStatus": "none"
-  },
-  {
-    "userid": "342022",
-    "uid": "342022",
-    "wallet_address": "0xdd9011e763ed61acc9bb1eff4cc09ff1f3ecab2a",
-    "username": "user_342022",
-    "email": null,
-    "balance": 0,
-    "total_invested": 0,
-    "total_income": 0,
-    "balances": {
-      "usdt": 0,
-      "btc": 0,
-      "eth": 0,
-      "usdc": 0,
-      "pyusd": 0,
-      "sol": 0
-    },
-    "created_at": "2025-12-06T02:38:21.009Z",
-    "last_login": "2025-12-06T02:38:21.009Z",
-    "status": "active",
-    "kycStatus": "none"
   }
 ]

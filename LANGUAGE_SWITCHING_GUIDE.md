@@ -33,7 +33,7 @@ BVOX Finance now supports **real-time language switching** across the entire web
 
 ### Modified Files
 1. **`index.html`** - Added language script
-   - Added `<script src="./assets/js/lang.js"></script>`
+   - Added `<script src="./js/lang.js"></script>`
 2. **`lang.html`** - Updated language selection logic
    - Enhanced click handler with visual feedback
    - Integrated with `LanguageManager`

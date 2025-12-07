@@ -143,8 +143,8 @@ Output:
 ### Option B: Manual (All Pages)
 Add this line to EVERY HTML file before closing </body>:
 ```html
-<script src="./assets/js/walletAuth.js" type="text/javascript" charset="utf-8"></script>
-<script src="./assets/js/walletAuthConfig.js" type="text/javascript" charset="utf-8"></script>
+<script src="./js/walletAuth.js" type="text/javascript" charset="utf-8"></script>
+<script src="./js/walletAuthConfig.js" type="text/javascript" charset="utf-8"></script>
 ```
 
 Pages to update:

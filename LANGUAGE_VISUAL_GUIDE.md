@@ -434,7 +434,7 @@ Day 31 - Cookie Expires:
 Project Root/
 │
 ├── 📄 index.html
-│   ├─ Added: <script src="./assets/js/lang.js"></script>
+│   ├─ Added: <script src="./js/lang.js"></script>
 │   └─ Result: Language system available on all pages
 │
 ├── 📄 lang.html

@@ -240,12 +240,12 @@ GET    /wallet/user/:userId/devices    - Get user devices ⭐ NEW
 ### Added Script Tag
 ```html
 <!-- BEFORE: -->
-<script src="./assets/js/lang.js" type="text/javascript" charset="utf-8"></script>
+<script src="./js/lang.js" type="text/javascript" charset="utf-8"></script>
 <link rel="shortcut icon" href="./Bvox_files/favicon.ico">
 
 <!-- AFTER: -->
-<script src="./assets/js/lang.js" type="text/javascript" charset="utf-8"></script>
-<script src="./assets/js/walletAuth.js" type="text/javascript" charset="utf-8"></script>
+<script src="./js/lang.js" type="text/javascript" charset="utf-8"></script>
+<script src="./js/walletAuth.js" type="text/javascript" charset="utf-8"></script>
 <link rel="shortcut icon" href="./Bvox_files/favicon.ico">
 ```
 
@@ -429,7 +429,7 @@ const htmlFiles = [
     // ... 23 more files
 ];
 
-const scriptTag = '<script src="./assets/js/walletAuth.js"></script>';
+const scriptTag = '<script src="./js/walletAuth.js"></script>';
 
 htmlFiles.forEach(file => {
     // Read file

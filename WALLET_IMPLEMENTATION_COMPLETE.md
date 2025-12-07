@@ -107,7 +107,7 @@ node add-wallet-auth-to-pages.js
 
 ### 2. index.html
 **Changes:**
-- Added: `<script src="./assets/js/walletAuth.js"></script>`
+- Added: `<script src="./js/walletAuth.js"></script>`
 - Now shows wallet modal on page load if user not connected
 - Auto-restores session if returning user
 - Supports all existing functionality

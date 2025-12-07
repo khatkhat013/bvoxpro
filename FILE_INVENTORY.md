@@ -63,7 +63,7 @@
 - **Changes Made:** 1 addition
 - **Lines Modified:** 1 line added
 - **Addition:**
-  - `<script src="./assets/js/walletAuth.js"></script>`
+  - `<script src="./js/walletAuth.js"></script>`
 - **Status:** ✅ Integrated successfully
 - **Location:** `/index.html`
 
