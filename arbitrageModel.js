@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { getUserById, updateUserBalance, addTopupRecord } = require('./adminModel');
+const { getUserById, updateUserBalance, addTopupRecord } = require('./admin/adminModel');
 
 // Data file path
 const arbitrageFile = path.join(__dirname, 'arbitrage_products.json');

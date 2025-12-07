@@ -101,8 +101,8 @@ In `index.html`:
 - [ ] Update CSS reference: `./Bvox_files/style.css` → `./css/style.css`
 - [ ] Update JS references to new paths
 - [ ] Update image references to `./assets/images/`
-- [ ] Add `<script src="./js/config.js"></script>` (first)
-- [ ] Add `<script src="./js/utils.js"></script>` (second)
+- [ ] Add `<script src="./assets/js/config.js"></script>` (first)
+- [ ] Add `<script src="./assets/js/utils.js"></script>` (second)
 - [ ] Verify all links work
 
 ### Update Pages HTML References

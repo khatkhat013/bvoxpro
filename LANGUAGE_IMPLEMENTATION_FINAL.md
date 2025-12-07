@@ -21,7 +21,7 @@ When users click on the language selection page and choose a language, the entir
    - Automatic text translation on page load
 
 2. **`index.html`** - Updated
-   - Added language script: `<script src="./js/lang.js"></script>`
+   - Added language script: `<script src="./assets/js/lang.js"></script>`
    - All pages now support multi-language
 
 3. **`lang.html`** - Enhanced

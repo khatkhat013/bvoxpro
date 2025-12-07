@@ -89,7 +89,7 @@ Users can now select from **9 languages** and see the entire website instantly t
 
 1. **`index.html`**
    - Added language script tag
-   - `<script src="./js/lang.js"></script>`
+   - `<script src="./assets/js/lang.js"></script>`
    - Positioned after config.js
 
 2. **`lang.html`**

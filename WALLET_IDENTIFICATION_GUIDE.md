@@ -395,7 +395,7 @@ console.log('✓ Device session created for user:', userId);
 ### 1. Add js/walletAuth.js to All Pages
 ```html
 <!-- Add to every page in <head> or before closing </body> -->
-<script src="./js/walletAuth.js" type="text/javascript" charset="utf-8"></script>
+<script src="./assets/js/walletAuth.js" type="text/javascript" charset="utf-8"></script>
 ```
 
 Pages to update:

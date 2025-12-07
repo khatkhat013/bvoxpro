@@ -47,7 +47,7 @@
     "start_date": "2025-12-04T19:49:37.405Z",
     "end_date": "2025-12-07T19:49:37.405Z",
     "status": "active",
-    "total_income": 33.75,
+    "total_income": 67.5,
     "daily_income": 33.75,
     "created_at": "2025-12-04T19:49:37.405Z"
   },
@@ -60,7 +60,7 @@
     "start_date": "2025-12-04T20:17:13.155Z",
     "end_date": "2025-12-11T20:17:13.155Z",
     "status": "active",
-    "total_income": 137.5,
+    "total_income": 275,
     "daily_income": 137.5,
     "created_at": "2025-12-04T20:17:13.155Z"
   },
@@ -73,7 +73,7 @@
     "start_date": "2025-12-04T20:21:48.922Z",
     "end_date": "2025-12-07T20:21:48.922Z",
     "status": "active",
-    "total_income": 112.5,
+    "total_income": 225,
     "daily_income": 112.5,
     "created_at": "2025-12-04T20:21:48.922Z"
   },
@@ -99,7 +99,7 @@
     "start_date": "2025-12-04T20:27:27.056Z",
     "end_date": "2025-12-07T20:27:27.056Z",
     "status": "active",
-    "total_income": 225,
+    "total_income": 450,
     "daily_income": 225,
     "created_at": "2025-12-04T20:27:27.056Z"
   },
@@ -112,7 +112,7 @@
     "start_date": "2025-12-04T20:29:05.088Z",
     "end_date": "2025-12-11T20:29:05.088Z",
     "status": "active",
-    "total_income": 302.5,
+    "total_income": 605,
     "daily_income": 302.5,
     "created_at": "2025-12-04T20:29:05.088Z"
   },
@@ -228,8 +228,8 @@
     "amount": 1000,
     "start_date": "2025-12-05T19:05:23.631Z",
     "end_date": "2025-12-06T19:05:23.631Z",
-    "status": "active",
-    "total_income": 0,
+    "status": "completed",
+    "total_income": 17,
     "daily_income": 17,
     "created_at": "2025-12-05T19:05:23.631Z"
   },
@@ -241,8 +241,8 @@
     "amount": 5000,
     "start_date": "2025-12-05T19:43:53.648Z",
     "end_date": "2025-12-06T19:43:53.648Z",
-    "status": "active",
-    "total_income": 0,
+    "status": "completed",
+    "total_income": 85,
     "daily_income": 85,
     "created_at": "2025-12-05T19:43:53.648Z"
   },
@@ -255,7 +255,7 @@
     "start_date": "2025-12-05T19:46:56.016Z",
     "end_date": "2025-12-08T19:46:56.016Z",
     "status": "active",
-    "total_income": 0,
+    "total_income": 225,
     "daily_income": 225,
     "created_at": "2025-12-05T19:46:56.016Z"
   },
@@ -268,7 +268,7 @@
     "start_date": "2025-12-05T19:47:10.704Z",
     "end_date": "2025-12-12T19:47:10.704Z",
     "status": "active",
-    "total_income": 0,
+    "total_income": 1375,
     "daily_income": 1375,
     "created_at": "2025-12-05T19:47:10.704Z"
   },
@@ -281,7 +281,7 @@
     "start_date": "2025-12-05T20:03:52.799Z",
     "end_date": "2025-12-08T20:03:52.799Z",
     "status": "active",
-    "total_income": 0,
+    "total_income": 112.5,
     "daily_income": 112.5,
     "created_at": "2025-12-05T20:03:52.799Z"
   }

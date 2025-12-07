@@ -13,7 +13,7 @@ const { registerUser } = require('./userModel');
 const { saveTopupRecord, getUserTopupRecords } = require('./topupRecordModel');
 const { saveWithdrawalRecord, getUserWithdrawalRecords } = require('./withdrawalRecordModel');
 const { saveExchangeRecord, getUserExchangeRecords } = require('./exchangeRecordModel');
-const { getAllUsers, getUserById, updateUserBalance, getUserStats, addTopupRecord, addWithdrawalRecord, deleteTransaction, setUserFlag } = require('./adminModel');
+const { getAllUsers, getUserById, updateUserBalance, getUserStats, addTopupRecord, addWithdrawalRecord, deleteTransaction, setUserFlag } = require('./admin/adminModel');
 const { registerAdmin, loginAdmin, getAdminById, getAllAdmins, verifyToken } = require('./authModel');
 const { getAllArbitrageProducts, getArbitrageProductById, createArbitrageSubscription, getUserArbitrageSubscriptions, getUserArbitrageStats } = require('./arbitrageModel');
 const { settleArbitrageSubscriptions } = require('./arbitrageModel');
@@ -42,7 +42,7 @@ const mimeTypes = {
     '.otf': 'application/font-otf',
     '.wasm': 'application/wasm'
 };
-
+    
 // Robust body parser used by legacy endpoints: accepts JSON or x-www-form-urlencoded
 const querystring = require('querystring');
 function parseBodyString(body) {
@@ -219,6 +219,17 @@ const server = http.createServer((req, res) => {
                 }, 60 * 1000);
             } catch (e) {
                 console.error('Failed to schedule settlement worker:', e);
+            }
+        }
+
+        // Serve root index.html for / requests
+        if (pathname === '/' || pathname === '/index.html') {
+            const indexPath = path.join(__dirname, 'index.html');
+            if (fs.existsSync(indexPath)) {
+                const data = fs.readFileSync(indexPath);
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(data);
+                return;
             }
         }
 
@@ -3752,7 +3763,7 @@ const server = http.createServer((req, res) => {
 
     // Lightweight compatibility endpoints for legacy frontend requests
     // POST /api/Wallet/getuserzt - return KYC/status info from users.json
-    if (pathname === '/api/Wallet/getuserzt' && req.method === 'POST') {
+    if ((pathname === '/api/Wallet/getuserzt' || pathname === '/api/wallet/user-status') && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', () => {
@@ -3796,7 +3807,7 @@ const server = http.createServer((req, res) => {
     }
 
     // POST /api/User/getsfxtz - notification/status quick check (legacy)
-    if (pathname === '/api/User/getsfxtz' && req.method === 'POST') {
+    if ((pathname === '/api/User/getsfxtz' || pathname === '/api/user/notification-status') && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', () => {
@@ -3989,6 +4000,58 @@ const server = http.createServer((req, res) => {
         pathname = '/index.html';
     }
 
+    // ADMIN ROUTE ENFORCEMENT: /admin/* requests must ONLY serve from /admin/ folder
+    // This ensures /admin/login.html serves from admin/login.html, NOT root/login.html
+    if (pathname.startsWith('/admin/')) {
+        // Extract the filename after /admin/
+        const adminPath = pathname.substring('/admin/'.length);
+        
+        // Build the admin file path strictly within admin folder
+        const adminFilePath = path.join(__dirname, 'admin', adminPath);
+        const adminFilePath_normalized = path.normalize(adminFilePath);
+        
+        // Verify the file is within admin folder (prevent directory traversal)
+        const adminFolderPath = path.normalize(path.join(__dirname, 'admin'));
+        if (!adminFilePath_normalized.startsWith(adminFolderPath)) {
+            res.writeHead(403, { 'Content-Type': 'text/plain' });
+            res.end('Forbidden: Path traversal detected');
+            return;
+        }
+        
+        // Check if file exists in admin folder
+        if (fs.existsSync(adminFilePath_normalized)) {
+            // Use the admin file path - this is strictly bounded to /admin/
+            pathname = '/admin/' + adminPath;
+        } else {
+            // File not found in admin folder - return 404 (don't fall back to root)
+            res.writeHead(404, { 'Content-Type': 'text/html' });
+            res.end(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>404 - Admin File Not Found</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 50px; }
+                        h1 { color: #d32f2f; }
+                        p { font-size: 16px; }
+                    </style>
+                </head>
+                <body>
+                    <h1>404 - Admin Resource Not Found</h1>
+                    <p>The requested admin resource: <code>${pathname}</code> could not be found.</p>
+                    <p><a href="/admin/">Go back to admin</a></p>
+                </body>
+                </html>
+            `);
+            return;
+        }
+    }
+    
+    // Admin root route - map /admin to /admin/index.html
+    if (pathname === '/admin') {
+        pathname = '/admin/index.html';
+    }
+
     // Handle requests for /js/ files - redirect to /Bvox_files/
     if (pathname.startsWith('/js/')) {
         const filename = pathname.split('/').pop();
@@ -4006,6 +4069,17 @@ const server = http.createServer((req, res) => {
                 break;
             }
         }
+    }
+
+    // Map /assets/* requests to the consolidated public/assets folder
+    // so that clients requesting /assets/... are served from /public/assets/...
+    if (pathname.startsWith('/assets/')) {
+        pathname = '/public' + pathname; // becomes /public/assets/...
+    }
+
+    // Map legacy /img/* requests to public/assets/img/* when present
+    if (pathname.startsWith('/img/')) {
+        pathname = '/public/assets' + pathname; // becomes /public/assets/img/...
     }
 
     // Build file path
@@ -4049,8 +4123,8 @@ const server = http.createServer((req, res) => {
                     };
 
                     const alt = tryFindInFilesDirs();
-                    // KYC Stage 1: user identity submission - /User/setuserrz1
-                    if (pathname === '/User/setuserrz1' && req.method === 'POST') {
+                    // KYC Stage 1: user identity submission - /api/user/kyc/stage1
+                    if ((pathname === '/User/setuserrz1' || pathname === '/api/User/setuserrz1' || pathname === '/api/user/kyc/stage1') && req.method === 'POST') {
                         let body = '';
                         req.on('data', chunk => { body += chunk; });
                         req.on('end', () => {
@@ -4105,8 +4179,8 @@ const server = http.createServer((req, res) => {
                         return;
                     }
 
-                    // KYC Stage 2: address proof submission - /User/setuserrz2
-                    if (pathname === '/User/setuserrz2' && req.method === 'POST') {
+                    // KYC Stage 2: address proof submission - /api/user/kyc/stage2
+                    if ((pathname === '/User/setuserrz2' || pathname === '/api/User/setuserrz2' || pathname === '/api/user/kyc/stage2') && req.method === 'POST') {
                         let body = '';
                         req.on('data', chunk => { body += chunk; });
                         req.on('end', () => {
@@ -4160,7 +4234,7 @@ const server = http.createServer((req, res) => {
                         return;
                     }
                     // API-prefixed handlers so frontend using `apiurl = .../api` works
-                    if (pathname === '/api/User/setuserrz1' && req.method === 'POST') {
+                    if ((pathname === '/api/User/setuserrz1' || pathname === '/api/user/kyc/stage1') && req.method === 'POST') {
                         let body = '';
                         req.on('data', chunk => { body += chunk; });
                         req.on('end', () => {
@@ -4208,7 +4282,7 @@ const server = http.createServer((req, res) => {
                         return;
                     }
 
-                    if (pathname === '/api/User/setuserrz2' && req.method === 'POST') {
+                    if ((pathname === '/api/User/setuserrz2' || pathname === '/api/user/kyc/stage2') && req.method === 'POST') {
                         let body = '';
                         req.on('data', chunk => { body += chunk; });
                         req.on('end', () => {
@@ -4763,6 +4837,17 @@ const server = http.createServer((req, res) => {
     });
 });
     
+
+// Register modular routes (if present)
+try {
+    const registerAllRoutes = require('./src/index');
+    if (typeof registerAllRoutes === 'function') {
+        registerAllRoutes(server);
+        console.log('[server] Modular routes registered (src/index.js)');
+    }
+} catch (e) {
+    console.warn('[server] No modular routes registered:', e && e.message ? e.message : e);
+}
 
 // Start server
 server.listen(PORT, HOST, () => {

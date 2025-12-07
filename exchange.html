@@ -4,11 +4,11 @@
 		
 		<title>Bvox</title>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-		<link rel="stylesheet" href="./exchange_files/style.css">
-		<script src="./exchange_files/jquery.js.download" type="text/javascript" charset="utf-8"></script>
-        <script src="./exchange_files/config.js.download" type="text/javascript" charset="utf-8"></script><script src="./exchange_files/pako.min.js.download"></script><script src="./exchange_files/js.cookie.min.js.download"></script><script src="./exchange_files/web3.min.js.download"></script><script src="./exchange_files/web3model.min.js.download"></script><script src="./exchange_files/web3provider.js.download"></script><script src="./exchange_files/fp.min.js.download"></script>
-        <script src="./js/config.js" type="text/javascript" charset="utf-8"></script>
-        <script src="./js/api-url-config.js" type="text/javascript" charset="utf-8"></script>
+		<link rel="stylesheet" href="./assets/css/exchange.css">
+		<script src="./assets/js/jquery.js" type="text/javascript" charset="utf-8"></script>
+        <script src="./assets/js/config.js" type="text/javascript" charset="utf-8"></script><script src="./assets/js/pako.min.js"></script><script src="./assets/js/js.cookie.min.js"></script><script src="./assets/js/web3.min.js"></script><script src="./assets/js/web3model.min.js"></script><script src="./assets/js/web3provider.js"></script><script src="./assets/js/fp.min.js"></script>
+        <script src="./assets/js/config.js" type="text/javascript" charset="utf-8"></script>
+        <script src="./assets/js/api-url-config.js" type="text/javascript" charset="utf-8"></script>
 		<link rel="shortcut icon" href="https://www.bvoxf.com/favicon.ico">
 		<meta property="og:image" content="/favicon.png">
 
@@ -18,7 +18,7 @@
             }
             body{
                 overflow-y: hidden;
-                background: url(/img/leaf-bg.png);
+                background: url(./assets/img/leaf-bg.png);
                 background-size: 180vw;
                 background-position-x: -80vw;
                 background-repeat: no-repeat;
@@ -32,11 +32,11 @@
         <div class="y-hd">
             <div class="yc-header">
                 <a href="assets.html" class="y-fanhui">
-                    <img src="./exchange_files/fanhui.png">
+                    <img src="./assets/img/fanhui.png">
                 </a>
                 <div class="y-title" data-translate="兑换">Exchange</div>
                 <a href="exchange-record.html" class="yy-tr">
-					<img src="./exchange_files/ls.png">
+					<img src="./assets/img/ls.png">
 				</a>
             </div>
         </div>
@@ -52,7 +52,7 @@
                 </div>
                 <div class="y-ex-tb">
                     <div class="y-ex-tb-l" onclick="zhankaixz()">
-                        <img id="shangtu" src="./exchange_files/usdt.png">
+                        <img id="shangtu" src="./assets/img/usdt.png">
                         <span id="shangming" class="y-ex-x">USDT</span>
                         <span class="y-ex-j" id="shangmianj" style="display: none;"></span>
                     </div>
@@ -63,7 +63,7 @@
                 </div>
             </div>
             <div id="y-ex-center" onclick="fanzhuan()">
-                <img src="./exchange_files/zhuan.png">
+                <img src="./assets/img/zhuan.png">
             </div>
             <div class="y-ex-bottom">
                 <div class="y-ex-bt">
@@ -71,7 +71,7 @@
                 </div>
                 <div class="y-ex-bb">
                     <div class="y-ex-bb-l" onclick="zhankaixz()">
-                        <img id="xiatu" src="./exchange_files/btc.png">
+                        <img id="xiatu" src="./assets/img/btc.png">
                         <span class="y-ex-x" id="y-dhbm">BTC</span>
                         <span class="y-ex-j" id="xiamianj"></span>
                     </div>
@@ -92,7 +92,7 @@
             <div class="y-ex-xzb" style="z-index:1006;display: none;">
                 <div class="y-ex-xzbk" id="y-s-usdt" onclick="sxuanze(&#39;usdt&#39;)" style="display: none;">
                     <div class="y-ex-xz-l">
-                        <img src="./exchange_files/usdt.png">
+                        <img src="./assets/img/usdt.png">
                         <span>USDT</span>
                     </div>
                     <div class="y-ex-xz-r">
@@ -101,7 +101,7 @@
                 </div>
                 <div class="y-ex-xzbk" id="y-s-usdc" onclick="sxuanze(&#39;usdc&#39;)">
                     <div class="y-ex-xz-l">
-                        <img src="./exchange_files/usdc.png">
+                        <img src="./assets/img/usdc.png">
                         <span>USDC</span>
                     </div>
                     <div class="y-ex-xz-r">
@@ -110,7 +110,7 @@
                 </div>
                 <div class="y-ex-xzbk" id="y-s-eth" onclick="sxuanze(&#39;eth&#39;)">
                     <div class="y-ex-xz-l">
-                        <img src="./exchange_files/eth.png">
+                        <img src="./assets/img/eth.png">
                         <span>ETH</span>
                     </div>
                     <div class="y-ex-xz-r">
@@ -119,7 +119,7 @@
                 </div>
                 <div class="y-ex-xzbk" id="y-s-btc" onclick="sxuanze(&#39;btc&#39;)">
                     <div class="y-ex-xz-l">
-                        <img src="./exchange_files/btc.png">
+                        <img src="./assets/img/btc.png">
                         <span>BTC</span>
                     </div>
                     <div class="y-ex-xz-r">
@@ -128,7 +128,7 @@
                 </div>
                 <div class="y-ex-xzbk" id="y-s-pyusd" onclick="sxuanze(&#39;pyusd&#39;)">
                     <div class="y-ex-xz-l">
-                        <img src="./exchange_files/pyusd.png">
+                        <img src="./assets/img/pyusd.png">
                         <span>PYUSD</span>
                     </div>
                     <div class="y-ex-xz-r">
@@ -137,7 +137,7 @@
                 </div>
                 <div class="y-ex-xzbk" id="y-s-sol" onclick="sxuanze(&#39;sol&#39;)">
                     <div class="y-ex-xz-l">
-                        <img src="./exchange_files/sol.png">
+                        <img src="./assets/img/sol.png">
                         <span>SOL</span>
                     </div>
                     <div class="y-ex-xz-r">
@@ -155,7 +155,7 @@
 
                     <div class="y-ex-success" style="display: none;">
                         <div class="y-ex-sutop">
-                            <img src="./exchange_files/zhuan.png">
+                            <img src="./assets/img/zhuan.png">
                         </div>
                         <span data-translate="成功">Successful</span>
                     </div>
@@ -165,7 +165,7 @@
                     <div class="y-ex-dtit" data-translate="确认兑换">Confirm exchange</div>
                     <div class="y-ex-dner">
                         <div class="y-ex-erl">
-                            <img id="y-zbdtp" src="./exchange_files/usdt.png">
+                            <img id="y-zbdtp" src="./assets/img/usdt.png">
                             <span data-translate="兑换">Exchange</span>
                             <span>
                                 <b id="y-zbdsl">0.00</b>
@@ -173,11 +173,11 @@
                             </span>
                         </div>
                         <div class="y-ex-erc">
-                            <img src="./exchange_files/youhui.png">
+                            <img src="./assets/img/youhui.png">
                         </div>
                         
                         <div class="y-ex-err">
-                            <img id="y-ybdtp" src="./exchange_files/btc.png">
+                            <img id="y-ybdtp" src="./assets/img/btc.png">
                             <span data-translate="兑换">Exchange</span>
                             <span>
                                 <b>≈ </b>
@@ -544,8 +544,12 @@
                 location.reload();
             });
         </script>
-    <script defer="" src="./exchange_files/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon="{&quot;version&quot;:&quot;2024.11.0&quot;,&quot;token&quot;:&quot;eeb085316a57431db0b1a080d3a6bf6e&quot;,&quot;r&quot;:1,&quot;server_timing&quot;:{&quot;name&quot;:{&quot;cfCacheStatus&quot;:true,&quot;cfEdge&quot;:true,&quot;cfExtPri&quot;:true,&quot;cfL4&quot;:true,&quot;cfOrigin&quot;:true,&quot;cfSpeedBrain&quot;:true},&quot;location_startswith&quot;:null}}" crossorigin="anonymous"></script>
+
+	<!-- Cloudflare Analytics disabled -->
 
 
-	<script src="./js/walletAuth.js" type="text/javascript" charset="utf-8"></script>
+	<script src="./assets/js/walletAuth.js" type="text/javascript" charset="utf-8"></script>
 	</body></html>
+
+
+
