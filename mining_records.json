@@ -119,12 +119,12 @@
     "stakedAmount": 2,
     "currency": "ETH",
     "dailyYield": 0.004,
-    "totalIncome": 3.6240000000000028,
+    "totalIncome": 4.240000000000003,
     "todayIncome": 0.008,
     "status": "active",
     "startDate": "2025-12-05T18:57:21.759Z",
     "activationDate": "2025-12-05T18:57:21.759Z",
-    "lastIncomeAt": "2025-12-07T05:15:05.909Z"
+    "lastIncomeAt": "2025-12-07T06:44:54.373Z"
   },
   {
     "id": "3ce281b6-4f28-4f79-a19f-4a6266dc033a",
@@ -133,12 +133,12 @@
     "stakedAmount": 12,
     "currency": "ETH",
     "dailyYield": 0.0045,
-    "totalIncome": 24.40799999999982,
+    "totalIncome": 28.565999999999704,
     "todayIncome": 0.05399999999999999,
     "status": "active",
     "startDate": "2025-12-05T18:57:35.097Z",
     "activationDate": "2025-12-05T18:57:35.097Z",
-    "lastIncomeAt": "2025-12-07T05:15:05.909Z"
+    "lastIncomeAt": "2025-12-07T06:44:54.373Z"
   },
   {
     "id": "5b47b3ec-43c4-4428-86b5-13e7c79464c6",
@@ -147,12 +147,12 @@
     "stakedAmount": 20,
     "currency": "ETH",
     "dailyYield": 0.005,
-    "totalIncome": 45.20000000000037,
+    "totalIncome": 52.90000000000048,
     "todayIncome": 0.1,
     "status": "active",
     "startDate": "2025-12-05T18:57:44.485Z",
     "activationDate": "2025-12-05T18:57:44.485Z",
-    "lastIncomeAt": "2025-12-07T05:15:05.910Z"
+    "lastIncomeAt": "2025-12-07T06:44:54.374Z"
   },
   {
     "id": "db7ce007-06e1-4e79-aad2-e64b14633b2d",
@@ -161,11 +161,11 @@
     "stakedAmount": 40,
     "currency": "ETH",
     "dailyYield": 0.006,
-    "totalIncome": 108.47999999999922,
+    "totalIncome": 126.95999999999883,
     "todayIncome": 0.24,
     "status": "active",
     "startDate": "2025-12-05T18:57:57.017Z",
     "activationDate": "2025-12-05T18:57:57.017Z",
-    "lastIncomeAt": "2025-12-07T05:15:05.911Z"
+    "lastIncomeAt": "2025-12-07T06:44:54.375Z"
   }
 ]

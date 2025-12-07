@@ -20,7 +20,8 @@
 					}
 					if (opts && typeof opts.url === 'string' && opts.url.indexOf('Wallet/getbalance') !== -1) {
 						opts = Object.assign({}, opts);
-						opts.url = 'http://localhost:3000/api/Wallet/getbalance';
+						var _api_base = (typeof window !== 'undefined' && (window.apiurl || (window.API_CONFIG && window.API_CONFIG.baseURL))) || 'http://localhost:3000/api';
+						opts.url = _api_base.replace(/\/$/, '') + '/Wallet/getbalance';
 					}
 					return _origAjax.call(this, opts);
 				}catch(e){
@@ -33,8 +34,9 @@
 				$.post = function(url){
 					try{
 						if (typeof url === 'string' && url.indexOf('Wallet/getbalance') !== -1){
-							arguments[0] = 'http://localhost:3000/api/Wallet/getbalance';
-						}
+									var _post_base = (typeof window !== 'undefined' && (window.apiurl || (window.API_CONFIG && window.API_CONFIG.baseURL))) || 'http://localhost:3000/api';
+									arguments[0] = _post_base.replace(/\/$/, '') + '/Wallet/getbalance';
+								}
 						return _origPost.apply(this, arguments);
 					}catch(e){
 						return _origPost.apply(this, arguments);

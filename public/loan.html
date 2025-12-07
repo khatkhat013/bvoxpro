@@ -170,7 +170,7 @@
                 var username = Cookies.get('username');
                 
                 $.ajax({
-                    url: '/Wallet/getloaned',
+                    url: apiurl + '/Wallet/getloaned',
                     type: 'POST',
                     data: {
                         'userid': userid,
@@ -210,7 +210,7 @@
                         formData.append('file', fileInput.files[0]);
 
                         $.ajax({
-                            url: '/Wallet/upload_image',
+                            url: apiurl + '/Wallet/upload_image',
                             type: 'POST',
                             data: formData,
                             contentType: false,

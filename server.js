@@ -4119,6 +4119,13 @@ const server = http.createServer((req, res) => {
                         // Also try a central 'img' folder if it exists
                         const centralImg = path.join(__dirname, 'img', pathname.replace(/^\/img\//, ''));
                         if (fs.existsSync(centralImg)) return centralImg;
+                        // Also try the `public` folder as a fallback for top-level pages like /coin.html
+                        try {
+                            const publicCandidate = path.join(__dirname, 'public', pathname.replace(/^\//, ''));
+                            if (fs.existsSync(publicCandidate)) return publicCandidate;
+                        } catch (e) {
+                            // ignore
+                        }
                         return null;
                     };
 

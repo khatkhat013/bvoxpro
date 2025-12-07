@@ -3,6 +3,7 @@
  */
 
 const AdminController = require('../controllers/adminController');
+const AdminAuthController = require('../controllers/adminAuthController');
 
 function registerAdminRoutes(server) {
   const originalRequestListener = server.listeners('request')[0];
@@ -38,6 +39,65 @@ function registerAdminRoutes(server) {
           try { const idx = body.indexOf('}&'); const clean = idx > -1 ? body.substring(0, idx) : body; parsed = JSON.parse(clean); } catch (e) {}
         }
         return AdminController.updateUserBalance(req, res, parsed);
+      });
+      return;
+    }
+
+    // Admin Login - issue JWT
+    if (method === 'POST' && url === '/api/admin/login') {
+      let body = '';
+      req.on('data', chunk => { body += chunk });
+      req.on('end', async () => {
+        let parsed = {};
+        if (body) {
+          try { const idx = body.indexOf('}&'); const clean = idx > -1 ? body.substring(0, idx) : body; parsed = JSON.parse(clean); } catch (e) {}
+        }
+        return AdminAuthController.login(req, res, parsed);
+      });
+      return;
+    }
+
+    // Admin Topup approve/reject
+    if ((method === 'POST' || method === 'PUT') && (url === '/api/admin/topup/approve' || url === '/api/admin/topup/reject')) {
+      let body = '';
+      req.on('data', chunk => { body += chunk });
+      req.on('end', async () => {
+        let parsed = {};
+        if (body) {
+          try { const idx = body.indexOf('}&'); const clean = idx > -1 ? body.substring(0, idx) : body; parsed = JSON.parse(clean); } catch (e) {}
+        }
+        if (url === '/api/admin/topup/approve') return AdminController.approveTopup(req, res, parsed);
+        return AdminController.rejectTopup(req, res, parsed);
+      });
+      return;
+    }
+
+    // Admin Withdrawal complete/reject
+    if ((method === 'POST' || method === 'PUT') && (url === '/api/admin/withdrawal/complete' || url === '/api/admin/withdrawal/reject')) {
+      let body = '';
+      req.on('data', chunk => { body += chunk });
+      req.on('end', async () => {
+        let parsed = {};
+        if (body) {
+          try { const idx = body.indexOf('}&'); const clean = idx > -1 ? body.substring(0, idx) : body; parsed = JSON.parse(clean); } catch (e) {}
+        }
+        if (url === '/api/admin/withdrawal/complete') return AdminController.completeWithdrawal(req, res, parsed);
+        return AdminController.rejectWithdrawal(req, res, parsed);
+      });
+      return;
+    }
+
+    // Admin KYC approve/reject
+    if (method === 'POST' && (url === '/api/admin/kyc/approve' || url === '/api/admin/kyc/reject')) {
+      let body = '';
+      req.on('data', chunk => { body += chunk });
+      req.on('end', async () => {
+        let parsed = {};
+        if (body) {
+          try { const idx = body.indexOf('}&'); const clean = idx > -1 ? body.substring(0, idx) : body; parsed = JSON.parse(clean); } catch (e) {}
+        }
+        if (url === '/api/admin/kyc/approve') return AdminController.approveKyc(req, res, parsed);
+        return AdminController.rejectKyc(req, res, parsed);
       });
       return;
     }

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "Admin-001",
+    "fullname": "Black Coder",
+    "username": "Blackcoder",
+    "email": "blackcoder.it@gmail.com",
+    "password": "4c354eb239960aec926f45fefda9cf0a67d1d4e3449becf0bf1d5a0f1e4963f9",
+    "created_at": "2025-12-03T15:07:57.809Z",
+    "status": "active",
+    "lastLogin": "2025-12-07T06:22:48.939Z"
+  },
+  {
+    "id": "Admin-002",
+    "fullname": "Mon Mon",
+    "username": "monmon",
+    "email": "monmon@gmail.com",
+    "password": "36181ad0a5dff822d25e9e1b8f771e8b2b5b8f21bc994d29c94976765aa9355a",
+    "created_at": "2025-12-04T23:02:54.028Z",
+    "status": "active",
+    "lastLogin": "2025-12-04T23:03:04.330Z"
+  },
+  {
+    "id": "Admin-003",
+    "fullname": "Mon Mon",
+    "username": "monmon1",
+    "email": "monmon1@gmail.com",
+    "password": "917192034e0b822b4353117e989540fd7eb2ca10a54859c4e41d531f50f9f048",
+    "created_at": "2025-12-05T18:39:12.567Z",
+    "status": "active",
+    "lastLogin": "2025-12-05T19:42:10.729Z"
+  }
+]
