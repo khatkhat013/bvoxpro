@@ -1,9 +1,19 @@
-const mysql = require('mysql2/promise');
+let mysql;
+try {
+    mysql = require('mysql2/promise');
+} catch (e) {
+    console.warn('mysql2/promise not available; MySQL features disabled.');
+    mysql = null;
+}
 
 // Single connection for testing/development
 let connection = null;
 
 async function getConnection() {
+    if (!mysql) {
+        throw new Error('MySQL library not available');
+    }
+
     // If connection doesn't exist, create it
     if (!connection) {
         connection = await mysql.createConnection({
@@ -62,7 +72,7 @@ async function allAsync(query, params = []) {
         console.log('✓ MySQL database connected (cryptonest)');
     } catch (err) {
         console.error('✗ MySQL connection failed:', err.message);
-        process.exit(1);
+        console.warn('Continuing without MySQL. Some features may be limited.');
     }
 })();
 

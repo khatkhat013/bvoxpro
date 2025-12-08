@@ -44,7 +44,20 @@ const path = require('path');
 const url = require('url');
 
 // Configuration
-const PORT = process.env.PORT || 3000;
+// Determine port from: CLI (--port 3001, --port=3001, -p 3001), env, or default
+let PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const argIndex = process.argv.findIndex(a => a === '--port' || a === '-p');
+if (argIndex !== -1 && process.argv.length > argIndex + 1) {
+    const p = parseInt(process.argv[argIndex + 1], 10);
+    if (!isNaN(p)) PORT = p;
+}
+// support --port=3001 style
+const portEquals = process.argv.find(a => a && a.startsWith('--port='));
+if (portEquals) {
+    const p = parseInt(portEquals.split('=')[1], 10);
+    if (!isNaN(p)) PORT = p;
+}
+
 const HOST = '0.0.0.0'; // Listen on all network interfaces
 
 // MIME types
@@ -91,6 +104,30 @@ const server = http.createServer((req, res) => {
             res.writeHead(200);
             res.end();
             return;
+        }
+
+        // Serve public index for root requests so pages under `public/` work as site root
+        if (pathname === '/' || pathname === '') {
+            const publicIndex = path.join(__dirname, 'public', 'index.html');
+            if (fs.existsSync(publicIndex)) {
+                const data = fs.readFileSync(publicIndex);
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(data);
+                return;
+            }
+        }
+
+        // Map /assets/* -> public/assets/* so HTML inside `public/` can use '/assets/...' URLs
+        if (pathname.startsWith('/assets/')) {
+            const candidate = path.join(__dirname, 'public', pathname);
+            if (fs.existsSync(candidate)) {
+                const ext = path.extname(candidate).toLowerCase();
+                const mime = mimeTypes[ext] || 'application/octet-stream';
+                const data = fs.readFileSync(candidate);
+                res.writeHead(200, { 'Content-Type': mime });
+                res.end(data);
+                return;
+            }
         }
 
         // Handle user registration (wallet connect)
@@ -1503,7 +1540,40 @@ const server = http.createServer((req, res) => {
     }
 
     // Build file path
+    // Special mapping: legacy pages reference ./Bvox_files/* — map these to `public/assets` where possible
     let filePath = path.join(__dirname, pathname);
+    try {
+        if (pathname.startsWith('/Bvox_files/') || pathname.startsWith('Bvox_files/')) {
+            const base = path.basename(pathname);
+            const ext = path.extname(base).toLowerCase();
+            const candidates = [];
+            if (['.png', '.jpg', '.jpeg', '.ico', '.svg', '.webp'].includes(ext)) {
+                candidates.push(path.join(__dirname, 'public', 'assets', 'img', base));
+                candidates.push(path.join(__dirname, 'assets', 'img', base));
+            }
+            if (ext === '.js' || base.endsWith('.js') || base.endsWith('.js.download') || base.endsWith('.download')) {
+                candidates.push(path.join(__dirname, 'public', 'assets', 'js', base.replace('.download', '')));
+                candidates.push(path.join(__dirname, 'js', base.replace('.download', '')));
+            }
+            if (ext === '.css') {
+                candidates.push(path.join(__dirname, 'public', 'assets', 'css', base));
+                candidates.push(path.join(__dirname, 'css', base));
+            }
+            // Try candidates and fall back to original Bvox_files path
+            for (const c of candidates) {
+                if (fs.existsSync(c)) {
+                    filePath = c;
+                    break;
+                }
+            }
+            // If still pointing to Bvox_files, try to serve from Bvox_files directly if present
+            if (filePath.endsWith(path.normalize(pathname)) && fs.existsSync(path.join(__dirname, 'Bvox_files', base))) {
+                filePath = path.join(__dirname, 'Bvox_files', base);
+            }
+        }
+    } catch (mapErr) {
+        // ignore mapping errors and continue with default filePath
+    }
 
     // Resolve potential directory traversal attacks
     filePath = path.normalize(filePath);
@@ -1663,7 +1733,8 @@ server.on('error', (err) => {
     } else {
         console.error(`✗ Server error: ${err.message}`);
     }
-    process.exit(1);
+    // Do not exit the process here to allow the developer to inspect logs.
+    // If desired, the user can still terminate the process (Ctrl+C).
 });
 
 // Graceful shutdown
